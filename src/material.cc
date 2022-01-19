@@ -16,11 +16,13 @@ static Register<mpm::Material<3>, mpm::Bingham<3>, unsigned, const Json&>
     bingham_3d("Bingham3D");
 
 // BoundSurfPlasticity 2D
-static Register<mpm::Material<2>, mpm::BoundSurfPlasticity<2>, unsigned, const Json&>
+static Register<mpm::Material<2>, mpm::BoundSurfPlasticity<2>, unsigned,
+                const Json&>
     bound_surf_plasticity_2d("BoundSurfPlasticity2D");
 
 // BoundSurfPlasticity 3D
-static Register<mpm::Material<3>, mpm::BoundSurfPlasticity<3>, unsigned, const Json&>
+static Register<mpm::Material<3>, mpm::BoundSurfPlasticity<3>, unsigned,
+                const Json&>
     bound_surf_plasticity_3d("BoundSurfPlasticity3D");
 
 // LinearElastic 2D
