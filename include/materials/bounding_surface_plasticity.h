@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <iomanip>
 
 #include "Eigen/Dense"
 
@@ -93,30 +94,6 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
                                           mpm::dense_map* state_vars,
                                           bool hardening = true) override;
 
-  //! Compute stress invariants (p, q and M_theta)
-  //! \param[in] stress Stress
-  //! \param[in|out] p Mean stress
-  //! \param[in|out] q Deviatoric stress
-  void compute_stress_invariants(const Vector6d& stress, double* p, double* q);
-
-  //! Compute state variables (void ratio, p_image, e_image, etc)
-  //! \param[in] stress Stress
-  //! \param[in] state_vars History-dependent state variables
-  //! \param[in] yield_type Yild type (elastic or yield)
-  //! \retval status of computation of stress invariants
-  void compute_state_variables(
-      const Vector6d& stress, const Vector6d& dstrain,
-      mpm::dense_map* state_vars,
-      mpm::boundsurfplasticity::FailureState yield_type);
-
-  //! Compute yield function and yield state
-  //! \param[in] state_vars History-dependent state variables
-  //! \param[in] stress Stress
-  //! \retval yield_type Yield type (elastic or yield)
-  mpm::boundsurfplasticity::FailureState compute_yield_state(
-      double* yield_function, const Vector6d& stress,
-      mpm::dense_map* state_vars);
-
   //! Inline ternary function to check negative or zero numbers
   inline double check_low(double val) {
     return (val > 1.0e-15 ? val : 1.0e-15);
@@ -134,87 +111,104 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double density_{std::numeric_limits<double>::max()};
   //! Friction angle
   double friction_{std::numeric_limits<double>::max()};
+  //! Initial shear modulus
+  double G0_{std::numeric_limits<double>::max()};
   //! Poisson ratio
   double poisson_{std::numeric_limits<double>::max()};
-  //! Relative density (decimal)
-  double relative_density_{std::numeric_limits<double>::max()};
   //! Initial plastic shear modulus parameter
   double hr0_{std::numeric_limits<double>::max()};
-  //! Initial plastic bulk modulus parameter
-  double kr0_{std::numeric_limits<double>::max()};
-  //! Initial plastic bulk modulus power
-  double d0_{std::numeric_limits<double>::max()};
-  //! Initial UNKNOWN gamma parameter
-  double gamma0_{std::numeric_limits<double>::max()};
-  //! Initial UNKNOWN eta (maybe ita) parameter
-  double eta0_{std::numeric_limits<double>::max()};
-  //! p min
-  double pmin_{std::numeric_limits<double>::max()};
-  //! Initial maximum stress ratio
-  double Rm0_{std::numeric_limits<double>::max()};
-  //! Initial stress ratio
-  double R0_{std::numeric_limits<double>::max()};
-  //! Critical mean pressure
-  double pc_{std::numeric_limits<double>::max()};
-  //! Reference pressure
-  double p_atm_{std::numeric_limits<double>::max()};
-  //! Initial mean pressure
-  double p0_{std::numeric_limits<double>::max()};
-  //! fp ratio
-  double fp_{std::numeric_limits<double>::max()};
-
-
-
-  // DEFINED BASED ON USER INPUTS //////////////////////////////////////////////
-
-  //! Initial failure surface
-  double Rf0_{std::numeric_limits<double>::max()}; 
-  //! Failure surface
-  double Rf_{std::numeric_limits<double>::max()};
   //! Plastic shear modulus parameter
   double hr_{std::numeric_limits<double>::max()};
-  //! Plastic bulk modulus parameter
-  double kr_{std::numeric_limits<double>::max()};
+  //! Initial plastic bulk modulus power
+  double d0_{std::numeric_limits<double>::max()};
   //! Plastic bulk modulus power
   double d_{std::numeric_limits<double>::max()};
-  //! UNKNOWN gamma parameter
-  double gamma_{std::numeric_limits<double>::max()};
-  //! UNKNOWN eta (maybe ita) parameter
-  double eta_{std::numeric_limits<double>::max()};
-  //! Plastic shear modulus power #1
-  double ke_{std::numeric_limits<double>::max()};
+  //! fp ratio
+  double fp_{std::numeric_limits<double>::max()};
+  //! Initial plastic bulk modulus parameter
+  double kr0_{std::numeric_limits<double>::max()};
+  //! Plastic bulk modulus parameter
+  double kr_{std::numeric_limits<double>::max()};
+  //! Default b parameter
+  double b_{std::numeric_limits<double>::max()};
   //! Plastic shear modulus power #2
   double ka_{std::numeric_limits<double>::max()};
   //! Plastic bulk modulus power
   double ks_{std::numeric_limits<double>::max()};
+  //! Plastic shear modulus power #1
+  double ke_{std::numeric_limits<double>::max()};
+  //! Critical mean pressure
+  double pc_{std::numeric_limits<double>::max()};
+  //! Initial UNKNOWN gamma parameter
+  double gamma0_{std::numeric_limits<double>::max()};
+  //! UNKNOWN gamma parameter
+  double gamma_{std::numeric_limits<double>::max()};
+  //! Initial UNKNOWN eta (maybe ita) parameter
+  double eta0_{std::numeric_limits<double>::max()};
+  //! UNKNOWN eta (maybe ita) parameter
+  double eta_{std::numeric_limits<double>::max()};
+  //! Default a parameter
+  double ia_{std::numeric_limits<double>::max()};
+  //! Normal direction
+  double nd_{std::numeric_limits<double>::max()};
+  //! np parameter
+  double np_{std::numeric_limits<double>::max()};
+  //! Initial void ratio
+  double e0_{std::numeric_limits<double>::max()};
+  //! Reference pressure
+  double p_atm_{std::numeric_limits<double>::max()};
+  //! Initial failure surface
+  double Rf0_{std::numeric_limits<double>::max()}; 
+  //! Failure surface
+  double Rf_{std::numeric_limits<double>::max()};
+  //! Maximum pres-stress surface
+  double Rm_{std::numeric_limits<double>::max()};
+    //! Default tolerance
+  double tolerance_{std::numeric_limits<double>::epsilon()};
+  //! a vector
+  Eigen::Matrix<double, 6, 1> a_vector_; 
+  //! a scalar
+  double a_{std::numeric_limits<double>::max()};
+  //! Shear modulus
+  double G_{std::numeric_limits<double>::max()};
+  //! Bulk modulus 
+  double K_{std::numeric_limits<double>::max()};
+  //! pm parameter
+  double pm_{std::numeric_limits<double>::max()};
+  //! Strain vector
+  Eigen::Matrix<double, 6, 1> strain_; 
+  //! Mean pressure
+  double p_{std::numeric_limits<double>::max()};
+  //! Minimum mean pressure
+  double pmin_{std::numeric_limits<double>::max()};
   //! R max
   double Rmax_{std::numeric_limits<double>::max()};
+  //! Initial mean pressure
+  double p0_{std::numeric_limits<double>::max()};
+  //! Mean stress ratio (current / initial)
+  double p0p_{std::numeric_limits<double>::max()};
+  //! Total deviatoric plastic strain
+  double dep_{std::numeric_limits<double>::max()};
+  //! UNKNOWN & UNUSED
+  double chr_{std::numeric_limits<double>::max()};
+  //! UNKNOWN & UNUSED
+  double w_dif{std::numeric_limits<double>::max()};
+  //! UNKNOWN & UNUSED
+  double cg_{std::numeric_limits<double>::max()};
+  //! UNKNOWN & UNUSED
+  double ci_{std::numeric_limits<double>::max()};
+  //! Previous shear modulus
+  double gm_{std::numeric_limits<double>::max()};
+  //! Previous bulk modulus
+  double km_{std::numeric_limits<double>::max()};
+  //! Double shear strain
+  double ssn_{std::numeric_limits<double>::max()};
+  //! Relative density (decimal)
+  double relative_density_{std::numeric_limits<double>::max()};
 
 
-  //! Default a parameter
-  double a_{std::numeric_limits<double>::max()};
-  //! Default b parameter
-  double b_{std::numeric_limits<double>::max()};
-  
-  //! Initial Rp ratio
-  double Rp0_{std::numeric_limits<double>::max()};
-  //! Rp90 ratio
-  double Rp90_{std::numeric_limits<double>::max()};
 
 
-  // //! Minimum void ratio
-  // double lambda_{std::numeric_limits<double>::max()};
-  // //! Kappa swelling volumetric
-  // double kappa_{std::numeric_limits<double>::max()};
-  // //! Gamma void ratio at reference pressure
-  // double gamma_{std::numeric_limits<double>::max()};
-
-
-  // //! Initial void ratio
-  // double void_ratio_initial_{std::numeric_limits<double>::max()};
-
-  //! Default tolerance
-  double tolerance_{std::numeric_limits<double>::epsilon()};
   //! Failure state map
   std::map<int, mpm::boundsurfplasticity::FailureState> yield_type_ = {
       {0, mpm::boundsurfplasticity::FailureState::Elastic},

@@ -229,6 +229,24 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   const double Rd = Rp + (Rf_ - Rp) * (*state_vars).at("Ip");
 
 
+
+  // Note that stress (tension positive) should be converted to stress_neg
+  // (compression positive) for the Wang bounding surface plasticity model
+  Vector6d stress_neg = -1 * stress;
+  const double temp_p = mpm::materials::p(stress_neg);
+  if (temp_p < pmin_) { const double mean_p = pmin_; }
+  else { const double mean_p = temp_p; }
+
+
+
+
+
+
+
+
+
+
+
   Matrix6x6 de = Matrix6x6::Zero();
 
   
