@@ -2,8 +2,8 @@
 #define MPM_MATERIAL_BOUNDING_SURFACE_PLASTICITY_H_
 
 #include <cmath>
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 
 #include "Eigen/Dense"
 
@@ -103,9 +103,9 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   inline double check_one(double val) { return (val < 1.0 ? val : 1.0); }
 
   //! Inline function to scale
-  inline double scale(double factor, double Dr) {return (2. - factor + 2. * (factor - 1.) * Dr); }
-
-  // USER INPUTS ///////////////////////////////////////////////////////////////
+  inline double scale(double factor, double Dr) {
+    return (2. - factor + 2. * (factor - 1.) * Dr);
+  }
 
   //! Density
   double density_{std::numeric_limits<double>::max()};
@@ -158,56 +158,44 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! Reference pressure
   double p_atm_{std::numeric_limits<double>::max()};
   //! Initial failure surface
-  double Rf0_{std::numeric_limits<double>::max()}; 
+  double Rf0_{std::numeric_limits<double>::max()};
   //! Failure surface
   double Rf_{std::numeric_limits<double>::max()};
   //! Maximum pres-stress surface
   double Rm_{std::numeric_limits<double>::max()};
-    //! Default tolerance
+  //! Default tolerance
   double tolerance_{std::numeric_limits<double>::epsilon()};
   //! a vector
-  Eigen::Matrix<double, 6, 1> a_vector_; 
+  Eigen::Matrix<double, 6, 1> a_vector_;
   //! a scalar
   double a_{std::numeric_limits<double>::max()};
   //! Shear modulus
   double G_{std::numeric_limits<double>::max()};
-  //! Bulk modulus 
+  //! Bulk modulus
   double K_{std::numeric_limits<double>::max()};
-  //! pm parameter
-  double pm_{std::numeric_limits<double>::max()};
+  //! Max mean pressure
+  double p_max_{std::numeric_limits<double>::max()};
   //! Strain vector
-  Eigen::Matrix<double, 6, 1> strain_; 
+  Eigen::Matrix<double, 6, 1> strain_;
   //! Mean pressure
   double p_{std::numeric_limits<double>::max()};
   //! Minimum mean pressure
-  double pmin_{std::numeric_limits<double>::max()};
+  double pmin_{10.};
   //! R max
   double Rmax_{std::numeric_limits<double>::max()};
   //! Initial mean pressure
   double p0_{std::numeric_limits<double>::max()};
-  //! Mean stress ratio (current / initial)
-  double p0p_{std::numeric_limits<double>::max()};
   //! Total deviatoric plastic strain
   double dep_{std::numeric_limits<double>::max()};
-  //! UNKNOWN & UNUSED
-  double chr_{std::numeric_limits<double>::max()};
-  //! UNKNOWN & UNUSED
-  double w_dif{std::numeric_limits<double>::max()};
-  //! UNKNOWN & UNUSED
-  double cg_{std::numeric_limits<double>::max()};
-  //! UNKNOWN & UNUSED
-  double ci_{std::numeric_limits<double>::max()};
-  //! Previous shear modulus
-  double gm_{std::numeric_limits<double>::max()};
-  //! Previous bulk modulus
-  double km_{std::numeric_limits<double>::max()};
-  //! Double shear strain
-  double ssn_{std::numeric_limits<double>::max()};
+  //! Maximum shear modulus
+  double G_max_{std::numeric_limits<double>::max()};
+  //! Maximum bulk modulus
+  double K_max_{std::numeric_limits<double>::max()};
   //! Relative density (decimal)
   double relative_density_{std::numeric_limits<double>::max()};
 
-
-
+  //! Initialization bool
+  bool first_loop_{true};
 
   //! Failure state map
   std::map<int, mpm::boundsurfplasticity::FailureState> yield_type_ = {
