@@ -74,10 +74,11 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   using Material<Tdim>::console_;
 
  private:
-  //! Compute stress ratio invariant R
-  //! \param[in] dev_r stress ratio vector
-  //! \retval stress ratio invariant R
-  double compute_R(const Vector6d& dev_r);
+  //! Compute Frobenius inner product
+  //! \param[in] vec_A vector form of 2D matrix (i.e., Voigt notation)
+  //! \param[in] vec_B vector form of 2D matrix (i.e., Voigt notation)
+  //! \retval Frobenius innner product of 2 matrices 
+  double Frobenius_prod(const Vector6d& vec_A, const Vector6d& vec_B);
 
   //! Compute elastic tensor
   //! \param[in] stress Stress
