@@ -181,9 +181,7 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! Max mean pressure
   double p_max_{std::numeric_limits<double>::max()};
   //! Strain vector
-  Eigen::Matrix<double, 6, 1> strain_;
-  //! Mean pressure
-  double mean_p_{std::numeric_limits<double>::max()};
+  Eigen::Matrix<double, 6, 1> strain_{Vector6d::Zero()};
   //! Minimum allowable mean pressure
   double p_min_{10.};
   //! Maximum allowable R

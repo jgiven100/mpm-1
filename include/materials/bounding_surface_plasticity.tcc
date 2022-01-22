@@ -133,7 +133,22 @@ Eigen::Matrix<double, 6, 6>
     mpm::BoundSurfPlasticity<Tdim>::compute_elastic_tensor(
         const Vector6d& stress, mpm::dense_map* state_vars) {
 
+  // Shear modulus
+  const double G = this->G_;
+  const double a1 = this->K_ + (4.0 / 3.0) * G;
+  const double a2 = this->K_ - (2.0 / 3.0) * G;
+  const double S = 2. * G;
+
+  // compute elastic stiffness matrix
+  // clang-format off
   Matrix6x6 de = Matrix6x6::Zero();
+  de(0,0)=a1;    de(0,1)=a2;    de(0,2)=a2;    de(0,3)=0;    de(0,4)=0;    de(0,5)=0;
+  de(1,0)=a2;    de(1,1)=a1;    de(1,2)=a2;    de(1,3)=0;    de(1,4)=0;    de(1,5)=0;
+  de(2,0)=a2;    de(2,1)=a2;    de(2,2)=a1;    de(2,3)=0;    de(2,4)=0;    de(2,5)=0;
+  de(3,0)= 0;    de(3,1)= 0;    de(3,2)= 0;    de(3,3)=S;    de(3,4)=0;    de(3,5)=0;
+  de(4,0)= 0;    de(4,1)= 0;    de(4,2)= 0;    de(4,3)=0;    de(4,4)=S;    de(4,5)=0;
+  de(5,0)= 0;    de(5,1)= 0;    de(5,2)= 0;    de(5,3)=0;    de(5,4)=0;    de(5,5)=S;
+  // clang-format on
 
   return de;
 }
@@ -163,27 +178,32 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   // (compression positive) for the Wang bounding surface plasticity model
   Vector6d stress_comp = -1. * stress;
 
+  // Note that dstrain (engineering) should be converted to dstrain (true)
+  // for the Wang bounding surface plasticity model
+  Vector6d dstrain_t = dstrain;
+  for (unsigned i =0; i < 3; ++i) dstrain_t(i + 3) *= 0.5;
+
   // Stress-based initial values
   if (first_loop_){
     // Mean pressure
-    mean_p_ = check_low(mpm::materials::p(stress_comp));
+    double mean_p = check_low(mpm::materials::p(stress_comp));
 
     // Deviatoric stress ratio vector and invariant
-    Vector6d dev_r = stress_comp / mean_p_;
+    Vector6d dev_r = stress_comp / mean_p;
     for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
     double R = compute_R(dev_r);
 
     // Save for later
-    p_max_ = mean_p_;
+    p_max_ = mean_p;
     dev_a_vector_ = dev_r;    
     dev_a_scalar_ = R;
     Rm_ = R;
 
     // Check minimum allowalbe mean pressure
-    if (mean_p_ < p_min_) { mean_p_ = p_min_; }
+    if (mean_p < p_min_) { mean_p = p_min_; }
 
     // State index parameter
-    double Ip = mean_p_ / pc_;
+    double Ip = mean_p / pc_;
     
     // Dilation surface
     double Rp = fp_ * Rf_;
@@ -198,13 +218,13 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   }
 
   // Mean pressure
-  mean_p_ = check_low(mpm::materials::p(stress_comp));
+  double mean_p = check_low(mpm::materials::p(stress_comp));
 
   // Check minimum allowalbe mean pressure
-  if (mean_p_ < p_min_) { mean_p_ = p_min_; }
+  if (mean_p < p_min_) { mean_p = p_min_; }
 
   // Deviatoric stress ratio vector and invariant
-  Vector6d dev_r = stress_comp / mean_p_;
+  Vector6d dev_r = stress_comp / mean_p;
   for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
   double R = compute_R(dev_r);
 
@@ -214,17 +234,17 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
 
     // Update stress
     stress_comp *= scale;
-    for (unsigned i = 0; i < 3; ++i) stress_comp(i) -= (mean_p_ * (1. - scale));
+    for (unsigned i = 0; i < 3; ++i) stress_comp(i) -= (mean_p * (1. - scale));
 
     // Update deviatoric stress ratio and invariant 
-    dev_r = stress_comp / mean_p_;
+    dev_r = stress_comp / mean_p;
     for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1;
     R = compute_R(dev_r);
   }
 
 
-  Vector6d nl;
-  Vector6d rb;
+  Vector6d nl = Vector6d::Zero();
+  Vector6d rb = Vector6d::Zero();
   double rb_scalar = 0.;
 
   // Flow direction
@@ -260,13 +280,12 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
 
     // Normal
     nl = rb / rb_scalar;
-
   }
 
   // Elastic moduli
-  G_ = p_atm_ * G0_ * (std::pow((2.973 - e0_), 2) / (1. + e0_)) * std::sqrt(mean_p_ / p_atm_);
+  G_ = p_atm_ * G0_ * (std::pow((2.973 - e0_), 2) / (1. + e0_)) * std::sqrt(mean_p / p_atm_);
   K_ = (2. * G_ * (1. + poisson_)) / (3 * (1 - 2 * poisson_));
-  double G_over_K = G_ / K_;
+  const double G_over_K = G_ / K_;
 
   // Check maximum elastic moduli
   if (G_ > G_max_) {
@@ -275,14 +294,14 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   }
 
   // Plastic moduli
-  double C_g = std::max(0.05, 1. / (1. + gamma_ * std::pow(dep_, ke_)));
-  double C_i = (1. + gamma_ * std::pow(dep_, ke_)) / (1. + eta_ * gamma_ * std::pow(dep_, ke_));
+  const double C_g = std::max(0.05, 1. / (1. + gamma_ * std::pow(dep_, ke_)));
+  const double C_i = (1. + gamma_ * std::pow(dep_, ke_)) / (1. + eta_ * gamma_ * std::pow(dep_, ke_));
 
   double temp = std::max((rho_/rho_bar_), 1.E-5);
-  double temp_a = (1. - std::exp(1. - mean_p_ / p_min_));
+  double temp_a = (1. - std::exp(1. - mean_p / p_min_));
   double temp_b = std::min(temp, 1.);
   double temp_c = Rm_ / Rf_;
-  double temp_d = mean_p_ / p_max_;
+  double temp_d = mean_p / p_max_;
 
   // w_m parameter 
   double w_m = 0.;
@@ -319,44 +338,156 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   if (temp_b < 1.){
     factor = std::pow(temp_b, 30.);
   } else {
-    factor 1.0;
+    factor = 1.0;
   }
-  double w = w_r * (1. - factor) + w_m * factor;
+  const double w = w_r * (1. - factor) + w_m * factor;
 
+  const double kri = w / K_ / C_i; // probably delete
+  const double kokr = w / C_i; 
 
+  // Elastic stress increment
+  const Matrix6x6 de = this->compute_elastic_tensor(stress, state_vars);
+  const Vector6d dstress_e = de * dstrain_t;
+  const double d_mean_p_e = check_low(mpm::materials::p(dstress_e));
 
+  // Deviatoric strain increment
+  const double vol_strain = -1. * (dstrain_t(0) + dstrain_t(1) + dstrain_t(2));
+  Vector6d dev_dstrain = -1. * dstrain_t;
+  for (unsigned i = 0; i < 3; ++i) dev_dstrain(i) -= (vol_strain / 3.);
 
+  // dot
+  double dot = 0.;
+  for (unsigned i = 0; i < 3; ++i) dot += ((dev_dstrain(i) * dev_r(i)) + 2. * (dev_dstrain(i + 3) * dev_r(i + 3)));
 
-  // Vector6d temp0;
-  // for (unsigned i; i < 6; ++i) temp0(i) = i*2;
+  double drm = 0.;
+  for (unsigned i = 0; i < 3; ++i) drm += ((dev_dstrain(i) * dev_dstrain(i)) + 2. * (dev_dstrain(i + 3) * dev_dstrain(i + 3)));
+  drm = std::sqrt(drm);
 
-  // Vector6d temp1;
-  // for (unsigned i; i < 6; ++i) temp1(i) = i+3;
+  double sum = 0.;
+  for (unsigned i = 0; i < 3; ++i) sum += ((dev_dstrain(i) * nl(i)) + 2. * (dev_dstrain(i + 3) * nl(i + 3)));
 
-  // Vector6d temp2 = temp0.cwiseProduct(temp0) - temp1;
-  // std::cout << "temp2(0) : " << temp2(0) << std::endl;
-  // std::cout << "temp2(1) : " << temp2(1) << std::endl;
-  // std::cout << "temp2(2) : " << temp2(2) << std::endl;
-  // std::cout << "temp2(3) : " << temp2(3) << std::endl;
-  // std::cout << "temp2(4) : " << temp2(4) << std::endl;
-  // std::cout << "temp2(5) : " << temp2(5) << std::endl;
+  dot *= (1. / drm);
 
+  // yn parameter (yield?)
+  double y = std::max(0., (dot * dot) + (Rf_ * Rf_) - (R * R));
+  y = -dot + std::sqrt(y);
+  const double yn = y / drm;
 
+  // Normal to FAILURE surface
+  Vector6d normal = dev_r + (dev_dstrain * yn);
+  double normal_temp = 0.;
+  for (unsigned i = 0; i < 3; ++i) normal_temp += ((normal(i) * normal(i)) + 2. * (normal(i + 3) * normal(i + 3)));
+  normal_temp = std::sqrt(normal_temp);
+  normal *= (1. / normal_temp);
 
+  //
+  const double nd = Rm_ / Rf_;
+  normal = ((1. - nd) * normal) + (nd * dev_dstrain / drm);
 
+  normal_temp = 0.;
+  for (unsigned i = 0; i < 3; ++i) normal_temp += ((normal(i) * normal(i)) + 2. * (normal(i + 3) * normal(i + 3)));
+  normal_temp = std::sqrt(normal_temp);
+  normal *= (1./ normal_temp);
 
+  // dr_ij
+  Vector6d dr_ij = Vector6d::Zero();
 
+  // Either loading or unloading
+  if (sum >= 0.) {
+    // Loading continues
+    // Updated maximum mean pressure
+    if (mean_p > p_max_) p_max_ = mean_p ;
 
+    // Elasto-plastic coefficients
+    const double Ar = 0.5 * Hr_over_G + 1.;
+    const double Ap = Hr_over_G * G_over_K * kokr;
+    const double Bp = 2. * G_over_K;
+    double Br = 0.;
+    for (unsigned i; i < 3; ++i) Br += ((dev_r(i) * normal(i)) + 2. * (dev_r(i + 3) * normal(i + 3)));
+    const double c2 = (Ar * Bp) - (Ap * Br);
 
+    // Qp
+    Vector6d Qp = normal * Bp;
+    for (unsigned i; i < 3; ++i) Qp(i) -= Br;
 
+    // Plastic increment
+    // Qp
+    double dQp = 0.;
+    for (unsigned i; i < 3; ++i) dQp += -(1. / c2) * ((Qp(i) * dstrain_t(i)) + (2. * (Qp(i + 3) * dstrain_t(i + 3))));
 
+    // Pr
+    const double temp_pr = 0.5 * kokr * Hr_over_G;
+    Vector6d Pr = normal;
+    for (unsigned i; i < 3; ++i) Pr(i) += temp_pr;
 
+    // Dp
+    Vector6d Dp = 2. * G_ * Pr * dQp;
 
+    //
+    stress_comp += dstress_e.cwiseProduct(Dp);
 
+    // 
+    double dp = ((dstress_e(0) + dstress_e(1) + dstress_e(2)) / 3.) - (2. * G_ * dQp * (Pr(0) + Pr(1) + Pr(2)) * (1. / 3.));
+    mean_p = check_low(mpm::materials::p(stress_comp));
 
-  Matrix6x6 de = Matrix6x6::Zero();
+    //
+    dr_ij = (dstress_e - 2. * G_ * Pr * dQp + stress * dp / mean_p) / mean_p;
+
+  } else {
+    // Unloading begins
+    // Reset projection center
+    for (unsigned i; i < 6; ++i) dev_a_vector_(i) = (stress_comp(i) / mean_p) - 1.;
+    dev_a_scalar_ = 0.;
+    for (unsigned i; i < 3; ++i) dev_a_scalar_ += ((dev_a_vector_(i) * dev_a_vector_(i)) + 2. * (dev_a_vector_(i + 3) * dev_a_vector_(i + 3)));
+    dev_a_scalar_ = std::sqrt(dev_a_scalar_);
+
+    // Update stress
+    stress_comp -= dstress_e;
+
+  }
+
+  //
+  double new_p = check_low(mpm::materials::p(stress_comp));
+  if (new_p < p_min_) {
+    for (unsigned i; i < 3; ++i) stress_comp(i) *= (p_min_ / mean_p);
+    new_p = p_min_;
+  }
+
+  //
+  dev_r = stress_comp / new_p;
+  for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
+  R = compute_R(dev_r);
+
+  // 
+  if (R > R_max_) {
+    stress_comp *= (R_max_ / R);
+    for (unsigned i = 0; i < 3; ++i) stress_comp(i) -= new_p * (1. - (R_max_ / R));
+  }
+
+  //
+  double dif = 0.;
+  for (unsigned i = 0; i < 3; ++i) dif += (dr_ij(i) * normal(i)) + (2. * (dr_ij(i + 3) * normal(i + 3)));
+  const double devp = mean_p * dif / Hr;
+  const double ddevp = std::sqrt(2.) * std::fabs(devp);
+
+  // check
+  double sum_dep = ddevp;
+  if (sum_dep > 1.) sum_dep = 0.;
+
+  // update strain
+  strain_ += dstrain_t;
+
+  // 
+  if (Rm_ > Rd_) dep_ += sum_dep;
+
+  // State index parameter
+  double Ip = mean_p / pc_;
+  
+  // Dilation surface
+  double Rp = fp_ * Rf_;
+  Rd_ = Rp + (Rf_ - Rp) * Ip;
 
   
   // Return updated stress
-  return (de * dstrain);
+  return (-1. * stress_comp);
 }
