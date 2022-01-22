@@ -144,13 +144,13 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double ke_{std::numeric_limits<double>::max()};
   //! Critical state mean pressure
   double pc_{std::numeric_limits<double>::max()};
-  //! Initial UNKNOWN gamma parameter
+  //! Initial gamma parameter
   double gamma0_{std::numeric_limits<double>::max()};
-  //! UNKNOWN gamma parameter
+  //! Gamma parameter
   double gamma_{std::numeric_limits<double>::max()};
-  //! Initial UNKNOWN eta (maybe ita) parameter
-  double eta0_{std::numeric_limits<double>::max()};
-  //! UNKNOWN eta (maybe ita) parameter
+  //! Initial eta (maybe ita) parameter
+  double eta0_{10.};
+  //! Eta (maybe ita) parameter
   double eta_{std::numeric_limits<double>::max()};
   //! Default a parameter
   double ia_{std::numeric_limits<double>::max()};

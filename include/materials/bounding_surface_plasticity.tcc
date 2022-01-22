@@ -25,10 +25,8 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     kr0_ = material_properties.at("kr0").template get<double>();
     // Initial plastic bulk modulus power
     d0_ = material_properties.at("d0").template get<double>();
-    // Initial UNKNOWN gamma parameter
-    gamma0_ = material_properties.at("unknown_gamma_parameter").template get<double>(); // UNKNOWN
-    // Initial UNKNOWN eta (maybe ita) parameter
-    eta0_ = material_properties.at("unknown_eta_parameter").template get<double>(); // UNKNOWN
+    // Initial gamma parameter
+    gamma0_ = material_properties.at("gamma0").template get<double>();
     // fp ratio
     fp_ = material_properties.at("fp").template get<double>();
     
@@ -47,6 +45,9 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     // Default minimum allowable mean pressure
     if (material_properties.find("pmin") != material_properties.end())
       p_min_ = material_properties.at("pmin").template get<double>();
+    // Default eta parameter
+    if (material_properties.find("eta0") != material_properties.end())
+      eta0_ = material_properties.at("eta0").template get<double>();
 
     
     // Initial failure surface
@@ -80,6 +81,10 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
 
     // Critical state mean pressure
     pc_ = p_atm_ * std::pow(((ec_ - e0_) / lambda_), (10./7.));
+
+
+    // Assume no initial strain
+    dep_ = 0.;
 
 
     // Properties
@@ -220,7 +225,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
 
   Vector6d nl;
   Vector6d rb;
-  double rb_scalar;
+  double rb_scalar = 0.;
 
   // Flow direction
   if (R > 0.999999 * Rm_) {
@@ -257,6 +262,69 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     nl = rb / rb_scalar;
 
   }
+
+  // Elastic moduli
+  G_ = p_atm_ * G0_ * (std::pow((2.973 - e0_), 2) / (1. + e0_)) * std::sqrt(mean_p_ / p_atm_);
+  K_ = (2. * G_ * (1. + poisson_)) / (3 * (1 - 2 * poisson_));
+  double G_over_K = G_ / K_;
+
+  // Check maximum elastic moduli
+  if (G_ > G_max_) {
+    G_max_ = G_;
+    K_max_ = K_;
+  }
+
+  // Plastic moduli
+  double C_g = std::max(0.05, 1. / (1. + gamma_ * std::pow(dep_, ke_)));
+  double C_i = (1. + gamma_ * std::pow(dep_, ke_)) / (1. + eta_ * gamma_ * std::pow(dep_, ke_));
+
+  double temp = std::max((rho_/rho_bar_), 1.E-5);
+  double temp_a = (1. - std::exp(1. - mean_p_ / p_min_));
+  double temp_b = std::min(temp, 1.);
+  double temp_c = Rm_ / Rf_;
+  double temp_d = mean_p_ / p_max_;
+
+  // w_m parameter 
+  double w_m = 0.;
+  if (kr_ < 100.) {
+    if (fp_ < 1.) {
+      w_m = std::pow(temp_d, ia_) * std::pow(temp_c, b_) * ((Rd_ - Rm_)/(Rf_ - Rm_)) * (1. / kr_); 
+    } else {
+      w_m = std::pow(temp_d, ia_) * std::pow(temp_c, b_) * (1. / kr_);
+    }
+  } else {
+    w_m = 0.;
+  }
+
+  // power m
+  double m = std::pow(std::min(2. * Rm_ / rho_bar_, 50.), ka_);
+  double tmp = std::pow(temp_b, m);
+  double temp_e = 1. / std::max(tmp, 1.0E-10);
+  
+  // Hardening (?)
+  double Hr = C_g * G_ * hr_ * (temp_e / temp_c - 1);
+  double Hr_over_G = Hr / G_; 
+
+  // w_r parameter
+  double w_r = 0.;
+  if (d_ < 100.){
+    double is = std::pow(std::max((p_max_ / p_atm_), 1.), ks_);
+    w_r = is * std::pow(temp_c, d_) * (rho_p_ - rho_) * std::pow(rho_, m);
+  } else {
+    w_r = 0.;
+  }
+
+  // pick w_m or w_r
+  double factor = 0.;
+  if (temp_b < 1.){
+    factor = std::pow(temp_b, 30.);
+  } else {
+    factor 1.0;
+  }
+  double w = w_r * (1. - factor) + w_m * factor;
+
+
+
 
 
   // Vector6d temp0;
