@@ -51,8 +51,8 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
 
     
     // Initial failure surface
-    const double sin_friction = sin(friction_);
-    Rf0_ = 2. * std::sqrt(3.) * sin_friction / (3. - sin_friction);
+    const double s_friction = sin(friction_);
+    Rf0_ = std::sqrt(2.) * 2. * std::sqrt(3.) * s_friction / (3. - s_friction);
     // Failure surface
     Rf_ = scale(1.1, relative_density_) * Rf0_;
     // Plastic shear modulus parameter
@@ -81,7 +81,6 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
 
     // Critical state mean pressure
     pc_ = p_atm_ * std::pow(((ec_ - e0_) / lambda_), (10./7.));
-
 
     // Assume no initial strain
     dep_ = 0.;
@@ -133,7 +132,7 @@ Eigen::Matrix<double, 6, 6>
     mpm::BoundSurfPlasticity<Tdim>::compute_elastic_tensor(
         const Vector6d& stress, mpm::dense_map* state_vars) {
 
-  // Shear modulus
+  // Elastic moduli
   const double G = this->G_;
   const double a1 = this->K_ + (4.0 / 3.0) * G;
   const double a2 = this->K_ - (2.0 / 3.0) * G;
@@ -172,9 +171,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     const Vector6d& stress, const Vector6d& dstrain,
     const ParticleBase<Tdim>* ptr, mpm::dense_map* state_vars) {
 
-  // Note that stress (tension positive) should be converted to stress_comp
-  // (compression positive) for the Wang bounding surface plasticity model
-  Vector6d stress_comp = -1. * stress;
+  Vector6d sigma = stress;
 
   // Note that dstrain (engineering) should be converted to dstrain (true)
   // for the Wang bounding surface plasticity model
@@ -184,12 +181,12 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   // Stress-based initial values
   if (first_loop_){
     // Mean pressure
-    double mean_p = check_low(mpm::materials::p(stress_comp));
+    double mean_p = check_low(-1. * mpm::materials::p(sigma));
 
     // Deviatoric stress ratio vector and invariant
-    Vector6d dev_r = stress_comp / mean_p;
+    Vector6d dev_r = -1. * sigma / mean_p;
     for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
-    double R = std::sqrt(0.5 * (Frobenius_prod(dev_r, dev_r)));
+    double R = std::sqrt((Frobenius_prod(dev_r, dev_r)));
 
     // Save for later
     p_max_ = mean_p;
@@ -216,28 +213,25 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   }
 
   // Mean pressure
-  double mean_p = check_low(mpm::materials::p(stress_comp));
+  double mean_p = check_low(-1. * mpm::materials::p(sigma));
 
   // Check minimum allowalbe mean pressure
   if (mean_p < p_min_) { mean_p = p_min_; }
 
   // Deviatoric stress ratio vector and invariant
-  Vector6d dev_r = stress_comp / mean_p;
+  Vector6d dev_r = -1. * sigma / mean_p;
   for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
-  double R = std::sqrt(0.5 * (Frobenius_prod(dev_r, dev_r)));
+  double R = std::sqrt((Frobenius_prod(dev_r, dev_r)));
 
   if (R > R_max_) {
-    // Scaling factor
-    const double scale = R_max_ / R;
-
     // Update stress
-    stress_comp *= scale;
-    for (unsigned i = 0; i < 3; ++i) stress_comp(i) -= (mean_p * (1. - scale));
+    sigma *= (R_max_ / R);
+    for (unsigned i = 0; i < 3; ++i) sigma(i) -= (mean_p * (1. - (R_max_ / R)));
 
     // Update deviatoric stress ratio and invariant 
-    dev_r = stress_comp / mean_p;
+    dev_r = -1. * sigma / mean_p;
     for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1;
-    R = std::sqrt(0.5 * (Frobenius_prod(dev_r, dev_r)));
+    R = std::sqrt((Frobenius_prod(dev_r, dev_r)));
   }
 
 
@@ -262,7 +256,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   } else {
     // Compute rho
     Vector6d r_less_a = dev_r - dev_a_vector_;
-    rho_ = std::sqrt(0.5 * (Frobenius_prod(r_less_a, r_less_a)));
+    rho_ = std::sqrt((Frobenius_prod(r_less_a, r_less_a)));
     
     // Compute rho_bar
     Vector6d a_less_r_norm = (dev_a_vector_ - dev_r).cwiseProduct(dev_a_vector_);
@@ -274,7 +268,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
 
     // Project
     rb = dev_a_vector_ + (rho_bar_ / rho_) * r_less_a;
-    rb_scalar = std::sqrt(0.5 * (Frobenius_prod(rb, rb)));
+    rb_scalar = std::sqrt((Frobenius_prod(rb, rb)));
 
     // Normal
     nl = rb / rb_scalar;
@@ -344,9 +338,9 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   const double kokr = w / C_i; 
 
   // Elastic stress increment
-  const Matrix6x6 de = this->compute_elastic_tensor(stress, state_vars);
-  const Vector6d dstress_e = de * dstrain_t;
-  const double d_mean_p_e = check_low(mpm::materials::p(dstress_e));
+  const Matrix6x6 de = this->compute_elastic_tensor(sigma, state_vars);
+  const Vector6d dsigma_e = de * dstrain_t;
+  const double d_mean_p_e = check_low(mpm::materials::p(dsigma_e));
 
   // Deviatoric strain increment
   const double vol_strain = -1. * (dstrain_t(0) + dstrain_t(1) + dstrain_t(2));
@@ -413,42 +407,42 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     Vector6d Dp = 2. * G_ * Pr * dQp;
 
     //
-    stress_comp += dstress_e.cwiseProduct(Dp);
+    sigma -= dsigma_e.cwiseProduct(2. * G_ * Pr * dQp);
 
     // 
-    double dp = ((dstress_e(0) + dstress_e(1) + dstress_e(2)) / 3.) - (2. * G_ * dQp * (Pr(0) + Pr(1) + Pr(2)) * (1. / 3.));
-    mean_p = check_low(mpm::materials::p(stress_comp));
+    double dp = ((dsigma_e(0) + dsigma_e(1) + dsigma_e(2)) / 3.) - (2. * G_ * dQp * (Pr(0) + Pr(1) + Pr(2)) * (1. / 3.));
+    mean_p = check_low(-1. * mpm::materials::p(sigma));
 
     //
-    dr_ij = (dstress_e - 2. * G_ * Pr * dQp + stress * dp / mean_p) / mean_p;
+    dr_ij = (dsigma_e - 2. * G_ * Pr * dQp + sigma * dp / mean_p) / mean_p;
 
   } else {
     // Unloading begins
     // Reset projection center
-    for (unsigned i; i < 6; ++i) dev_a_vector_(i) = (stress_comp(i) / mean_p) - 1.;
+    for (unsigned i; i < 6; ++i) dev_a_vector_(i) = -1. * (sigma(i) / mean_p) - 1.;
     dev_a_scalar_ = std::sqrt(Frobenius_prod(dev_a_vector_, dev_a_vector_));
 
     // Update stress
-    stress_comp -= dstress_e;
+    sigma -= dsigma_e;
 
   }
 
   //
-  double new_p = check_low(mpm::materials::p(stress_comp));
+  double new_p = check_low(-1. * mpm::materials::p(sigma));
   if (new_p < p_min_) {
-    for (unsigned i; i < 3; ++i) stress_comp(i) *= (p_min_ / mean_p);
+    for (unsigned i; i < 3; ++i) sigma(i) *= (p_min_ / mean_p);
     new_p = p_min_;
   }
 
   //
-  dev_r = stress_comp / new_p;
+  dev_r = -1. * sigma / new_p;
   for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
-  R = std::sqrt(0.5 * (Frobenius_prod(dev_r, dev_r)));
+  R = std::sqrt((Frobenius_prod(dev_r, dev_r)));
 
   // 
   if (R > R_max_) {
-    stress_comp *= (R_max_ / R);
-    for (unsigned i = 0; i < 3; ++i) stress_comp(i) -= new_p * (1. - (R_max_ / R));
+    sigma *= (R_max_ / R);
+    for (unsigned i = 0; i < 3; ++i) sigma(i) -= new_p * (1. - (R_max_ / R));
   }
 
   //
@@ -475,5 +469,5 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
 
   
   // Return updated stress
-  return (-1. * stress_comp);
+  return (sigma);
 }
