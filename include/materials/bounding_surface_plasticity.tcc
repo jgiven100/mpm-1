@@ -8,8 +8,12 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     density_ = material_properties.at("density").template get<double>();
     // Friction angle (input in degrees, saved in radians)
     friction_ = material_properties.at("friction").template get<double>() * M_PI / 180.;
+    // Initial shear modulus
+    G0_ = material_properties.at("G0").template get<double>();
     // Poisson ratio
     poisson_ = material_properties.at("poisson_ratio").template get<double>();
+    // Initial void ratio
+    e0_ = material_properties.at("initial_void_ratio").template get<double>();
     // Relative density (decimal)
     relative_density_ = material_properties.at("relative_density").template get<double>();
     if (relative_density_ > 1. or relative_density_ < 0.) {
@@ -25,24 +29,26 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     gamma0_ = material_properties.at("unknown_gamma_parameter").template get<double>(); // UNKNOWN
     // Initial UNKNOWN eta (maybe ita) parameter
     eta0_ = material_properties.at("unknown_eta_parameter").template get<double>(); // UNKNOWN
-    // Declared p min
-    pmin_ = material_properties.at("pmin").template get<double>();
-    // Initial maximum stress ratio
-    Rm0_ = material_properties.at("Rm0").template get<double>();
-    // Initial stress ratio
-    R0_ = material_properties.at("R0").template get<double>();
-    // Critical mean pressure
-    pc_ = material_properties.at("pc").template get<double>();
-    // Reference pressure
-    p_atm_ = material_properties.at("reference_pressure").template get<double>();
-    // Initial mean pressure
-    p0_ = material_properties.at("p0").template get<double>();
     // fp ratio
     fp_ = material_properties.at("fp").template get<double>();
+    
+    // Critical state slope
+    lambda_ = material_properties.at("lambda").template get<double>();
+    // Critical void ratio
+    ec_ = material_properties.at("critical_void_ratio").template get<double>();
 
 
+    // Default reference pressure (atmospheric pressure, 100 kPa)
+    if (material_properties.find("reference_pressure") != material_properties.end()) 
+      p_atm_ = material_properties.at("reference_pressure").template get<double>();
+    // Default tolerance
+    if (material_properties.find("tolerance") != material_properties.end())
+      tolerance_ = material_properties.at("tolerance").template get<double>();
+    // Default minimum allowable mean pressure
+    if (material_properties.find("pmin") != material_properties.end())
+      p_min_ = material_properties.at("pmin").template get<double>();
 
-
+    
     // Initial failure surface
     const double sin_friction = sin(friction_);
     Rf0_ = 2. * std::sqrt(3.) * sin_friction / (3. - sin_friction);
@@ -57,80 +63,24 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     // UNKNOWN gamma parameter
     gamma_ = scale(0.1, relative_density_) * gamma0_;
     // UNKNOWN eta (maybe ita) parameter
-    // eta_ = scale(0.05, relative_density_) * eta0_;                           // commented out in code
     eta_ = eta0_;
     // Plastic shear modulus power #1
-    ke_ = scale(1.5, relative_density_); 
+    ke_ = scale(1.5, relative_density_) * 2.; 
     // Plastic shear modulus power #2
     ka_ = std::pow(scale(2.0, relative_density_), 2);
     // Plastic bulk modulus power
     ks_ = 2. * std::max((relative_density_ - 0.5), 0.);
-
-    // Rmax
-    Rmax_ = 0.99 * Rf_;
-
-    // Default a parameter
-    a_ = 1.;
+    // Maximum allowable R
+    R_max_ = 0.99 * Rf_;
+    // Default input a parameter
+    ia_ = 1.;
     // Default b parameter
     b_ = 2.;
 
-    // Rp0
-    Rp0_ = Rf0_ * fp_;
-    // Rp90
-    Rp90_ = 0.9 * Rf0_;
 
+    // Critical state mean pressure
+    pc_ = p_atm_ * std::pow(((ec_ - e0_) / lambda_), (10./7.));
 
-    // TODO : remove me ////////////////////////////////////////////////////////
-    std::cout << "\n\ndensity_ : " << density_ << std::endl;
-    std::cout << "friction_ : " << friction_ << std::endl;
-    std::cout << "poisson_ : " << poisson_ << std::endl;
-    std::cout << "relative_density_ : " << relative_density_ << std::endl;
-    std::cout << "hr0_ : " << hr0_ << std::endl;
-    std::cout << "kr0_ : " << kr0_ << std::endl;
-    std::cout << "d0_ :  " << d0_ << std::endl;
-    std::cout << "gamma0_ :  " << gamma0_ << std::endl;
-    std::cout << "eta0_ :  " << eta0_ << std::endl;
-    std::cout << "pmin_ :  " << pmin_ << std::endl;
-    std::cout << "Rm0_ :  " << Rm0_ << std::endl;
-    std::cout << "R0_ :  " << R0_ << std::endl;
-    std::cout << "pc_ :  " << pc_ << std::endl;
-    std::cout << "p_atm_ :  " << p_atm_ << std::endl;
-    std::cout << "p0_ :  " << p0_ << std::endl;
-    std::cout << "fp_ :  " << fp_ << std::endl;
-
-
-
-
-
-
-
-    std::cout << "\n\nRf0_ : " << Rf0_ << std::endl;
-    std::cout << "Rf_ : " << Rf_ << std::endl;
-    std::cout << "hr_ : " << hr_ << std::endl;
-    std::cout << "kr_ : " << kr_ << std::endl;
-    std::cout << "d_ :  " << d_ << std::endl;
-    std::cout << "gamma_ :  " << gamma_ << std::endl;
-    std::cout << "eta_ :  " << eta_ << std::endl;
-    std::cout << "ke_ :  " << ke_ << std::endl;
-    std::cout << "ka_ :  " << ka_ << std::endl;
-    std::cout << "ks_ :  " << ks_ << std::endl;
-
-
-    std::cout << "\n\nRmax_ : " << Rmax_ << std::endl;
-    std::cout << "a_ : " << a_ << std::endl;
-    std::cout << "b_ : " << b_ << std::endl;
-    std::cout << "Rp0_ : " << Rp0_ << std::endl;
-    std::cout << "Rp90_ : " << Rp90_ << std::endl;
-
-
-
-
-
-
-
-
-    std::cout << "\n\n" << std::endl;
-    ////////////////////////////////////////////////////////////////////////////
 
     // Properties
     properties_ = material_properties;
@@ -145,22 +95,7 @@ template <unsigned Tdim>
 mpm::dense_map mpm::BoundSurfPlasticity<Tdim>::initialise_state_variables() {
 
   mpm::dense_map state_vars = {// Yield state: 0: elastic, 1: yield
-                               {"yield_state", 0},
-                               // Rho bar
-                               {"rho_bar", Rm0_},
-                               // Rho
-                               {"rho", R0_},
-                               // State pressure index
-                               {"Ip", (p0_ / pc_)},
-                               // Equivalent plastic deviatoric strain
-                               {"pdstrain", 0.},
-                               // Plastic strain components
-                               {"plastic_strain0", 0.},
-                               {"plastic_strain1", 0.},
-                               {"plastic_strain2", 0.},
-                               {"plastic_strain3", 0.},
-                               {"plastic_strain4", 0.},
-                               {"plastic_strain5", 0.}};
+                               {"yield_state", 0}};
 
   return state_vars;
 }
@@ -169,12 +104,22 @@ mpm::dense_map mpm::BoundSurfPlasticity<Tdim>::initialise_state_variables() {
 template <unsigned Tdim>
 std::vector<std::string> mpm::BoundSurfPlasticity<Tdim>::state_variables()
     const {
-  const std::vector<std::string> state_vars = {
-      "yield_state",     "rho_bar",         "rho",
-      "Ip",              "pdstrain",
-      "plastic_strain0", "plastic_strain1", "plastic_strain2",
-      "plastic_strain3", "plastic_strain4", "plastic_strain5"};
+  const std::vector<std::string> state_vars = {"yield_state"};
   return state_vars;
+}
+
+//! Compute stress ratio invariant R
+template <unsigned Tdim>
+double mpm::BoundSurfPlasticity<Tdim>::compute_R(const Vector6d& dev_r) {
+
+  const double R = std::sqrt(0.5 * (std::pow(dev_r(0), 2) + 
+                                    std::pow(dev_r(1), 2) +
+                                    std::pow(dev_r(2), 2) +
+                                    2 * std::pow(dev_r(3), 2) +
+                                    2 * std::pow(dev_r(4), 2) +
+                                    2 * std::pow(dev_r(5), 2)));
+
+  return R;
 }
 
 //! Compute elastic tensor
@@ -196,16 +141,8 @@ Eigen::Matrix<double, 6, 6>
         const ParticleBase<Tdim>* ptr, mpm::dense_map* state_vars,
         bool hardening) {
 
-  mpm::boundsurfplasticity::FailureState yield_type =
-      yield_type_.at(int((*state_vars).at("yield_state")));
-  // Return the updated stress in elastic state
-  const Matrix6x6 de = this->compute_elastic_tensor(stress, state_vars);
-  if (yield_type == mpm::boundsurfplasticity::FailureState::Elastic) {
-    return de;
-  }
+  Matrix6x6 dep = Matrix6x6::Zero();
 
-  // Construct dep matrix
-  Matrix6x6 dep = de;
   return dep;
 }
 
@@ -217,25 +154,127 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     const Vector6d& stress, const Vector6d& dstrain,
     const ParticleBase<Tdim>* ptr, mpm::dense_map* state_vars) {
 
-  // Compute alpha
-  const double alpha = 0.;
-  const double cos_alpha = cos(alpha);
-
-
-  // Rp parameter
-  const double Rp = Rp90_ + (Rp0_ - Rp90_) * std::fabs(cos_alpha);
-
-  // Dilation surface
-  const double Rd = Rp + (Rf_ - Rp) * (*state_vars).at("Ip");
-
-
-
-  // Note that stress (tension positive) should be converted to stress_neg
+  // Note that stress (tension positive) should be converted to stress_comp
   // (compression positive) for the Wang bounding surface plasticity model
-  Vector6d stress_neg = -1 * stress;
-  const double temp_p = mpm::materials::p(stress_neg);
-  if (temp_p < pmin_) { const double mean_p = pmin_; }
-  else { const double mean_p = temp_p; }
+  Vector6d stress_comp = -1. * stress;
+
+  // Stress-based initial values
+  if (first_loop_){
+    // Mean pressure
+    mean_p_ = check_low(mpm::materials::p(stress_comp));
+
+    // Deviatoric stress ratio vector and invariant
+    Vector6d dev_r = stress_comp / mean_p_;
+    for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
+    double R = compute_R(dev_r);
+
+    // Save for later
+    p_max_ = mean_p_;
+    dev_a_vector_ = dev_r;    
+    dev_a_scalar_ = R;
+    Rm_ = R;
+
+    // Check minimum allowalbe mean pressure
+    if (mean_p_ < p_min_) { mean_p_ = p_min_; }
+
+    // State index parameter
+    double Ip = mean_p_ / pc_;
+    
+    // Dilation surface
+    double Rp = fp_ * Rf_;
+    Rd_ = Rp + (Rf_ - Rp) * Ip;
+
+    // Rho
+    rho_ = R;
+    rho_bar_ = Rm_;
+
+    // Set bool
+    first_loop_ = false;    
+  }
+
+  // Mean pressure
+  mean_p_ = check_low(mpm::materials::p(stress_comp));
+
+  // Check minimum allowalbe mean pressure
+  if (mean_p_ < p_min_) { mean_p_ = p_min_; }
+
+  // Deviatoric stress ratio vector and invariant
+  Vector6d dev_r = stress_comp / mean_p_;
+  for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
+  double R = compute_R(dev_r);
+
+  if (R > R_max_) {
+    // Scaling factor
+    const double scale = R_max_ / R;
+
+    // Update stress
+    stress_comp *= scale;
+    for (unsigned i = 0; i < 3; ++i) stress_comp(i) -= (mean_p_ * (1. - scale));
+
+    // Update deviatoric stress ratio and invariant 
+    dev_r = stress_comp / mean_p_;
+    for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1;
+    R = compute_R(dev_r);
+  }
+
+
+  Vector6d nl;
+  Vector6d rb;
+  double rb_scalar;
+
+  // Flow direction
+  if (R > 0.999999 * Rm_) {
+    // New maximum pre-stress surface
+    Rm_ = R;
+
+    // Normal direction
+    nl = dev_r / R;
+
+    // 
+    rb = dev_r;
+
+    //
+    rb_scalar = Rm_;
+
+  } else {
+    // Compute rho
+    Vector6d r_less_a = dev_r - dev_a_vector_;
+    rho_ = compute_R(r_less_a);
+    
+    // Compute rho_bar
+    Vector6d a_less_r_norm = (dev_a_vector_ - dev_r).cwiseProduct(dev_a_vector_);
+    double temp = 0.;
+    for (unsigned i; i < 3; ++i) temp += (a_less_r_norm(i) + 2 * a_less_r_norm(i + 3));
+    temp *= (1. / rho_);
+    rho_bar_ = temp + std::sqrt(std::fabs(std::pow(temp, 2) + std::pow(Rm_, 2) - std::pow(dev_a_scalar_, 2)));
+    rho_p_ = temp + std::sqrt(std::fabs(std::pow(temp, 2) + std::pow(Rd_ , 2) - std::pow(dev_a_scalar_, 2)));
+
+    // Project
+    rb = dev_a_vector_ + (rho_bar_ / rho_) * r_less_a;
+    rb_scalar = compute_R(rb);
+
+    // Normal
+    nl = rb / rb_scalar;
+
+  }
+
+
+  // Vector6d temp0;
+  // for (unsigned i; i < 6; ++i) temp0(i) = i*2;
+
+  // Vector6d temp1;
+  // for (unsigned i; i < 6; ++i) temp1(i) = i+3;
+
+  // Vector6d temp2 = temp0.cwiseProduct(temp0) - temp1;
+  // std::cout << "temp2(0) : " << temp2(0) << std::endl;
+  // std::cout << "temp2(1) : " << temp2(1) << std::endl;
+  // std::cout << "temp2(2) : " << temp2(2) << std::endl;
+  // std::cout << "temp2(3) : " << temp2(3) << std::endl;
+  // std::cout << "temp2(4) : " << temp2(4) << std::endl;
+  // std::cout << "temp2(5) : " << temp2(5) << std::endl;
+
+
+
 
 
 

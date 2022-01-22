@@ -74,6 +74,11 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   using Material<Tdim>::console_;
 
  private:
+  //! Compute stress ratio invariant R
+  //! \param[in] dev_r stress ratio vector
+  //! \retval stress ratio invariant R
+  double compute_R(const Vector6d& dev_r);
+
   //! Compute elastic tensor
   //! \param[in] stress Stress
   //! \param[in] state_vars History-dependent state variables
@@ -137,7 +142,7 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double ks_{std::numeric_limits<double>::max()};
   //! Plastic shear modulus power #1
   double ke_{std::numeric_limits<double>::max()};
-  //! Critical mean pressure
+  //! Critical state mean pressure
   double pc_{std::numeric_limits<double>::max()};
   //! Initial UNKNOWN gamma parameter
   double gamma0_{std::numeric_limits<double>::max()};
@@ -155,20 +160,20 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double np_{std::numeric_limits<double>::max()};
   //! Initial void ratio
   double e0_{std::numeric_limits<double>::max()};
-  //! Reference pressure
-  double p_atm_{std::numeric_limits<double>::max()};
+  //! Reference pressure (atmospheric pressure, 100 kPa)
+  double p_atm_{100.0E+3};
   //! Initial failure surface
   double Rf0_{std::numeric_limits<double>::max()};
   //! Failure surface
   double Rf_{std::numeric_limits<double>::max()};
-  //! Maximum pres-stress surface
+  //! Maximum pre-stress surface
   double Rm_{std::numeric_limits<double>::max()};
   //! Default tolerance
   double tolerance_{std::numeric_limits<double>::epsilon()};
-  //! a vector
-  Eigen::Matrix<double, 6, 1> a_vector_;
-  //! a scalar
-  double a_{std::numeric_limits<double>::max()};
+  //! Deviatoric a vector
+  Eigen::Matrix<double, 6, 1> dev_a_vector_;
+  //! Deviatoric a scalar
+  double dev_a_scalar_{std::numeric_limits<double>::max()};
   //! Shear modulus
   double G_{std::numeric_limits<double>::max()};
   //! Bulk modulus
@@ -178,13 +183,11 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! Strain vector
   Eigen::Matrix<double, 6, 1> strain_;
   //! Mean pressure
-  double p_{std::numeric_limits<double>::max()};
-  //! Minimum mean pressure
-  double pmin_{10.};
-  //! R max
-  double Rmax_{std::numeric_limits<double>::max()};
-  //! Initial mean pressure
-  double p0_{std::numeric_limits<double>::max()};
+  double mean_p_{std::numeric_limits<double>::max()};
+  //! Minimum allowable mean pressure
+  double p_min_{10.};
+  //! Maximum allowable R
+  double R_max_{std::numeric_limits<double>::max()};
   //! Total deviatoric plastic strain
   double dep_{std::numeric_limits<double>::max()};
   //! Maximum shear modulus
@@ -193,6 +196,22 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double K_max_{std::numeric_limits<double>::max()};
   //! Relative density (decimal)
   double relative_density_{std::numeric_limits<double>::max()};
+
+  //! Critical state slope
+  double lambda_{std::numeric_limits<double>::max()};
+  //! Critical void ratio
+  double ec_{std::numeric_limits<double>::max()};
+
+  //! Rho
+  double rho_{std::numeric_limits<double>::max()};
+  //! Rho bar
+  double rho_bar_{std::numeric_limits<double>::max()};
+  //! Rho bar
+  double rho_p_{std::numeric_limits<double>::max()};
+
+  //! Dilation surface
+  double Rd_{std::numeric_limits<double>::max()};
+
 
   //! Initialization bool
   bool first_loop_{true};
