@@ -74,12 +74,6 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   using Material<Tdim>::console_;
 
  private:
-  //! Compute Frobenius inner product
-  //! \param[in] vec_A vector form of 2D matrix (i.e., Voigt notation)
-  //! \param[in] vec_B vector form of 2D matrix (i.e., Voigt notation)
-  //! \retval Frobenius innner product of 2 matrices 
-  double Frobenius_prod(const Vector6d& vec_A, const Vector6d& vec_B);
-
   //! Compute elastic tensor
   //! \param[in] stress Stress
   //! \param[in] state_vars History-dependent state variables
@@ -108,113 +102,97 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! Inline ternary function to check number not greater than one
   inline double check_one(double val) { return (val < 1.0 ? val : 1.0); }
 
+  //! Compute Frobenius inner product
+  //! \param[in] vec_A vector form of 2D matrix (i.e., Voigt notation)
+  //! \param[in] vec_B vector form of 2D matrix (i.e., Voigt notation)
+  //! \retval Frobenius innner product of 2 matrices
+  double frobenius_prod(const Vector6d& vec_A, const Vector6d& vec_B);
+
   //! Inline function to scale
   inline double scale(double factor, double Dr) {
     return (2. - factor + 2. * (factor - 1.) * Dr);
   }
 
+  //! Model parameter: wm function a power
+  double a_pow_{std::numeric_limits<double>::max()};
+  //! Previous stress reversal point
+  double alpha_s_{std::numeric_limits<double>::max()};
+  //! Previous stress reversal point
+  Eigen::Matrix<double, 6, 1> alpha_v_{Vector6d::Zero()};
+  //! Model parameter: wm function b power
+  double b_pow_{std::numeric_limits<double>::max()};
+  //! Input parameter: wr function d power
+  double d0_{std::numeric_limits<double>::max()};
+  //! Model parameter: wr function d power
+  double d_{std::numeric_limits<double>::max()};
   //! Density
   double density_{std::numeric_limits<double>::max()};
+  //! Cumulative plastic deviatoric strain
+  double dep_{std::numeric_limits<double>::max()};
+  //! Input parameter: Ci function eta coefficient
+  double eta0_{std::numeric_limits<double>::max()};
+  //! Model parameter: Ci function eta coefficient
+  double eta_{std::numeric_limits<double>::max()};
+  //! Initialization bool
+  bool first_loop_{true};
+  //! Ratio fp = Rp / Rf
+  double fp_{std::numeric_limits<double>::max()};
   //! Friction angle
   double friction_{std::numeric_limits<double>::max()};
-  //! Initial shear modulus
-  double G0_{std::numeric_limits<double>::max()};
-  //! Poisson ratio
-  double poisson_{std::numeric_limits<double>::max()};
-  //! Initial plastic shear modulus parameter
-  double hr0_{std::numeric_limits<double>::max()};
-  //! Plastic shear modulus parameter
-  double hr_{std::numeric_limits<double>::max()};
-  //! Initial plastic bulk modulus power
-  double d0_{std::numeric_limits<double>::max()};
-  //! Plastic bulk modulus power
-  double d_{std::numeric_limits<double>::max()};
-  //! fp ratio
-  double fp_{std::numeric_limits<double>::max()};
-  //! Initial plastic bulk modulus parameter
-  double kr0_{std::numeric_limits<double>::max()};
-  //! Plastic bulk modulus parameter
-  double kr_{std::numeric_limits<double>::max()};
-  //! Default b parameter
-  double b_{std::numeric_limits<double>::max()};
-  //! Plastic shear modulus power #2
-  double ka_{std::numeric_limits<double>::max()};
-  //! Plastic bulk modulus power
-  double ks_{std::numeric_limits<double>::max()};
-  //! Plastic shear modulus power #1
-  double ke_{std::numeric_limits<double>::max()};
-  //! Critical state mean pressure
-  double pc_{std::numeric_limits<double>::max()};
-  //! Initial gamma parameter
-  double gamma0_{std::numeric_limits<double>::max()};
-  //! Gamma parameter
-  double gamma_{std::numeric_limits<double>::max()};
-  //! Initial eta (maybe ita) parameter
-  double eta0_{10.};
-  //! Eta (maybe ita) parameter
-  double eta_{std::numeric_limits<double>::max()};
-  //! Default a parameter
-  double ia_{std::numeric_limits<double>::max()};
-  //! Normal direction
-  double nd_{std::numeric_limits<double>::max()};
-  //! np parameter
-  double np_{std::numeric_limits<double>::max()};
   //! Initial void ratio
   double e0_{std::numeric_limits<double>::max()};
-  //! Reference pressure (atmospheric pressure, 100 kPa)
-  double p_atm_{100.0E+3};
-  //! Initial failure surface
+  //! Shear modulus model parameter
+  double G0_{std::numeric_limits<double>::max()};
+  //! Input parameter: Ci and Cg functions gm coefficient
+  double gm0_{std::numeric_limits<double>::max()};
+  //! Model parameter: Ci and Cg functions gm coefficient
+  double gm_{std::numeric_limits<double>::max()};
+  //! Input parameter: Hr function hr coefficient
+  double hr0_{std::numeric_limits<double>::max()};
+  //! Model parameter: Hr function hr coefficient
+  double hr_{std::numeric_limits<double>::max()};
+  //! Model parameter: m function ka
+  double ka_{std::numeric_limits<double>::max()};
+  //! Model parameter: Ci and Cg function ke power
+  double ke_{std::numeric_limits<double>::max()};
+  //! Input parameter: wm function kr coefficient
+  double kr0_{std::numeric_limits<double>::max()};
+  //! Model parameter: wm function kr coefficient
+  double kr_{std::numeric_limits<double>::max()};
+  //! Model parameter: wr function ks power
+  double ks_{std::numeric_limits<double>::max()};
+  //! Critical state slope
+  double lambda_{std::numeric_limits<double>::max()};
+  //! Reference (atmospheric) pressure
+  double p_atm_{std::numeric_limits<double>::max()};
+  //! Max mean pressure
+  double p_max_{std::numeric_limits<double>::max()};
+  //! Minimum allowable mean pressure
+  double p_min_{std::numeric_limits<double>::max()};
+  //! Critical state mean pressure
+  double pc_{std::numeric_limits<double>::max()};
+  //! Poisson ratio
+  double poisson_{std::numeric_limits<double>::max()};
+  //! Maximum allowable R
+  double R_max_{std::numeric_limits<double>::max()};
+  //! Dilation surface
+  double Rd_{std::numeric_limits<double>::max()};
+  //! Input parameter: failure surface
   double Rf0_{std::numeric_limits<double>::max()};
   //! Failure surface
   double Rf_{std::numeric_limits<double>::max()};
   //! Maximum pre-stress surface
   double Rm_{std::numeric_limits<double>::max()};
-  //! Default tolerance
-  double tolerance_{std::numeric_limits<double>::epsilon()};
-  //! Deviatoric a vector
-  Eigen::Matrix<double, 6, 1> dev_a_vector_;
-  //! Deviatoric a scalar
-  double dev_a_scalar_{std::numeric_limits<double>::max()};
-  //! Shear modulus
-  double G_{std::numeric_limits<double>::max()};
-  //! Bulk modulus
-  double K_{std::numeric_limits<double>::max()};
-  //! Max mean pressure
-  double p_max_{std::numeric_limits<double>::max()};
-  //! Strain vector
-  Eigen::Matrix<double, 6, 1> strain_{Vector6d::Zero()};
-  //! Minimum allowable mean pressure
-  double p_min_{10.};
-  //! Maximum allowable R
-  double R_max_{std::numeric_limits<double>::max()};
-  //! Total deviatoric plastic strain
-  double dep_{std::numeric_limits<double>::max()};
-  //! Maximum shear modulus
-  double G_max_{std::numeric_limits<double>::max()};
-  //! Maximum bulk modulus
-  double K_max_{std::numeric_limits<double>::max()};
   //! Relative density (decimal)
   double relative_density_{std::numeric_limits<double>::max()};
-
-  //! Critical state slope
-  double lambda_{std::numeric_limits<double>::max()};
-  //! Critical void ratio
-  double ec_{std::numeric_limits<double>::max()};
-
-  //! Rho
+  //! Distance from reversal point to current state
   double rho_{std::numeric_limits<double>::max()};
-  //! Rho bar
+  //! Distance from reversal point to yield surface
   double rho_bar_{std::numeric_limits<double>::max()};
-  //! Rho bar
-  double rho_p_{std::numeric_limits<double>::max()};
-
-  //! Dilation surface
-  double Rd_{std::numeric_limits<double>::max()};
-
-
-  //! Initialization bool
-  bool first_loop_{true};
-
+  //! Distance from reversal point to dilation surface
+  double rho_d_{std::numeric_limits<double>::max()};
+  //! Default tolerance
+  double tolerance_{std::numeric_limits<double>::epsilon()};
   //! Failure state map
   std::map<int, mpm::boundsurfplasticity::FailureState> yield_type_ = {
       {0, mpm::boundsurfplasticity::FailureState::Elastic},
