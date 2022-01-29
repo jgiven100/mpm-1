@@ -14,7 +14,7 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     friction_ =
         material_properties.at("friction").template get<double>() * M_PI / 180.;
     // Initial void ratio
-    e0_ = material_properties.at("initial_void_ratio").template get<double>();
+    e0_ = material_properties.at("void_ratio_initial").template get<double>();
     // Shear modulus model parameter
     G0_ = material_properties.at("G0").template get<double>();
     // Input parameter: Ci and Cg functions gm coefficient
@@ -23,8 +23,6 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     hr0_ = material_properties.at("hr0").template get<double>();
     // Input parameter: wm function kr coefficient
     kr0_ = material_properties.at("kr0").template get<double>();
-    // Critical state slope
-    // lambda_ = material_properties.at("lambda").template get<double>();
     // Poisson ratio
     poisson_ = material_properties.at("poisson_ratio").template get<double>();
     // Relative density (decimal)
@@ -34,11 +32,25 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
       throw std::runtime_error("Relative density out of the bounds [0,1]!");
     }
 
+    // OPTIONAL:: Critical state line void ratio intercept
+    if (material_properties.find("void_ratio_intercept") !=
+        material_properties.end()) {
+      e_int_ =
+          material_properties.at("void_ratio_intercept").template get<double>();
+    } else {
+      e_int_ = 0.9;
+    }
     // OPTIONAL:: Input parameter: Ci function eta coefficient
     if (material_properties.find("eta0") != material_properties.end()) {
       eta0_ = material_properties.at("eta0").template get<double>();
     } else {
       eta0_ = 10.;
+    }
+    // OPTIONAL:: Critical state line slope
+    if (material_properties.find("lambda") != material_properties.end()) {
+      lambda_ = material_properties.at("lambda").template get<double>();
+    } else {
+      lambda_ = 0.03;
     }
     // OPTIONAL:: Reference (atomspheric) pressure
     if (material_properties.find("reference_pressure") !=
@@ -81,6 +93,8 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     kr_ = scale(2.0, relative_density_) * kr0_;
     // Model parameter: wr function ks power
     ks_ = 2. * std::max((relative_density_ - 0.5), 0.);
+    // Critical state mean pressure
+    pc_ = std::pow((e0_ - e_int_) / (-lambda_), (10. / 7.)) * p_atm_;
     // Input parameter: failure surface
     const double s_friction = sin(friction_);
     Rf0_ = std::sqrt(2.) * 2. * std::sqrt(3.) * s_friction / (3. - s_friction);
@@ -90,10 +104,6 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     R_max_ = 0.99 * Rf_;
     // Properties
     properties_ = material_properties;
-
-    // CRITICAL STATE MEAN PRESSURE --> HARD CODED FOR NOW /////////////////////
-    // pc_ = p_atm_ * std::pow(((CSL_void - CSL_intercept) / lambda_),(10./7.));
-    pc_ = std::pow((e0_ - 0.9) / (-0.03), (10. / 7.)) * p_atm_;
 
   } catch (std::exception& except) {
     console_->error("Material parameter not set: {}\n", except.what());

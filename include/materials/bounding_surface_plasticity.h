@@ -129,6 +129,10 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double density_{std::numeric_limits<double>::max()};
   //! Cumulative plastic deviatoric strain
   double dep_{std::numeric_limits<double>::max()};
+  //! Initial void ratio
+  double e0_{std::numeric_limits<double>::max()};
+  //! CSL void ratio intercept
+  double e_int_{std::numeric_limits<double>::max()};
   //! Input parameter: Ci function eta coefficient
   double eta0_{std::numeric_limits<double>::max()};
   //! Model parameter: Ci function eta coefficient
@@ -139,8 +143,6 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double fp_{std::numeric_limits<double>::max()};
   //! Friction angle
   double friction_{std::numeric_limits<double>::max()};
-  //! Initial void ratio
-  double e0_{std::numeric_limits<double>::max()};
   //! Shear modulus model parameter
   double G0_{std::numeric_limits<double>::max()};
   //! Input parameter: Ci and Cg functions gm coefficient
@@ -161,7 +163,7 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double kr_{std::numeric_limits<double>::max()};
   //! Model parameter: wr function ks power
   double ks_{std::numeric_limits<double>::max()};
-  //! Critical state slope
+  //! Critial state slope
   double lambda_{std::numeric_limits<double>::max()};
   //! Reference (atmospheric) pressure
   double p_atm_{std::numeric_limits<double>::max()};
