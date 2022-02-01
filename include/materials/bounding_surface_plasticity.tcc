@@ -8,13 +8,13 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     d0_ = material_properties.at("d0").template get<double>();
     // Density
     density_ = material_properties.at("density").template get<double>();
+    // Initial void ratio
+    ec_ = material_properties.at("critical_void_ratio").template get<double>();
     // Ratio fp = Rp / Rf
     fp_ = material_properties.at("fp").template get<double>();
     // Friction angle (input in degrees, saved in radians)
     friction_ =
         material_properties.at("friction").template get<double>() * M_PI / 180.;
-    // Initial void ratio
-    e0_ = material_properties.at("void_ratio_initial").template get<double>();
     // Shear modulus model parameter
     G0_ = material_properties.at("G0").template get<double>();
     // Input parameter: Ci and Cg functions gm coefficient
@@ -35,10 +35,10 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     // OPTIONAL:: Critical state line void ratio intercept
     if (material_properties.find("void_ratio_intercept") !=
         material_properties.end()) {
-      e_int_ =
+      e0_ =
           material_properties.at("void_ratio_intercept").template get<double>();
     } else {
-      e_int_ = 0.9;
+      e0_ = 0.9;
     }
     // OPTIONAL:: Input parameter: Ci function eta coefficient
     if (material_properties.find("eta0") != material_properties.end()) {
@@ -85,7 +85,7 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     gm_ = scale(0.1, relative_density_) * gm0_;
     // Model parameter: Hr function hr coefficient
     hr_ = scale(1.5, relative_density_) * hr0_;
-    // Model parameter: m function ka
+    // Model parameter: m function ka power
     ka_ = std::pow(scale(2.0, relative_density_), 2);
     // Model parameter: Ci and Cg function ke power
     ke_ = scale(1.5, relative_density_) * 2.;
@@ -94,7 +94,7 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     // Model parameter: wr function ks power
     ks_ = 2. * std::max((relative_density_ - 0.5), 0.);
     // Critical state mean pressure
-    pc_ = std::pow((e0_ - e_int_) / (-lambda_), (10. / 7.)) * p_atm_;
+    pc_ = std::pow((e0_ - ec_) / (lambda_), (10. / 7.)) * p_atm_;
     // Input parameter: failure surface
     const double s_friction = sin(friction_);
     Rf0_ = std::sqrt(2.) * 2. * std::sqrt(3.) * s_friction / (3. - s_friction);
@@ -153,7 +153,7 @@ Eigen::Matrix<double, 6, 6>
   const double mean_p = check_low(-1. * mpm::materials::p(stress));
   const double p_atm = this->p_atm_;
   const double G0 = this->G0_;
-  const double e0 = this->e0_;
+  const double e0 = this->ec_;
   const double nu = this->poisson_;
 
   // Elastic moduli
@@ -166,7 +166,7 @@ Eigen::Matrix<double, 6, 6>
   const double a2 = K - (2.0 / 3.0) * G;
   const double S = 2. * G;
 
-  // compute elastic stiffness matrix
+  // Compute elastic stiffness matrix
   Matrix6x6 de = Matrix6x6::Zero();
   // clang-format off
   de(0,0)=a1;    de(0,1)=a2;    de(0,2)=a2;    de(0,3)=0;    de(0,4)=0;    de(0,5)=0;
@@ -276,7 +276,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   }
 
   // Normal to yield (pre-stress) surface
-  Vector6d nl = Vector6d::Zero();
+  Vector6d n_bar = Vector6d::Zero();
 
   // Check if past maximum pre-stress surface
   if (R > 0.999999 * Rm_) {
@@ -284,7 +284,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     Rm_ = R;
 
     // Normal to yield (pre-stress) surface
-    nl = dev_r / R;
+    n_bar = dev_r / R;
 
   } else {
     // NOT CHECKED /////////////////////////////////////////////////////////////
@@ -293,11 +293,8 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     rho_ = std::sqrt((frobenius_prod(r_less_a, r_less_a)));
 
     // Compute rho_bar
-    Vector6d a_less_r_norm = (alpha_v_ - dev_r).cwiseProduct(alpha_v_);
-    double temp = 0.;
-    for (unsigned i; i < 3; ++i)
-      temp += (a_less_r_norm(i) + 2 * a_less_r_norm(i + 3));
-    temp *= (1. / rho_);
+    const double a_less_r_norm = frobenius_prod((alpha_v_ - dev_r), alpha_v_);
+    const double temp = a_less_r_norm / rho_;
     rho_bar_ = temp + std::sqrt(std::fabs(std::pow(temp, 2) + std::pow(Rm_, 2) -
                                           std::pow(alpha_s_, 2)));
     rho_d_ = temp + std::sqrt(std::fabs(std::pow(temp, 2) + std::pow(Rd_, 2) -
@@ -308,73 +305,48 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     const double r_bar_scalar = std::sqrt((frobenius_prod(r_bar, r_bar)));
 
     // Normal to yield (pre-stress) surface
-    nl = r_bar / r_bar_scalar;
+    n_bar = r_bar / r_bar_scalar;
   }
 
-  // Shear and bulk elastic moduli
-  const double G = p_atm_ * G0_ * (std::pow((2.973 - e0_), 2) / (1. + e0_)) *
+  // Elastic shear and bulk modulus
+  const double G = p_atm_ * G0_ * (std::pow((2.973 - ec_), 2) / (1. + ec_)) *
                    std::sqrt(mean_p / p_atm_);
   const double K = (2. * G * (1. + poisson_)) / (3 * (1 - 2 * poisson_));
   const double G_over_K = G / K;
 
-  // Plastic moduli
-  const double C_g = std::max(0.05, 1. / (1. + gm_ * std::pow(dep_, ke_)));
-  const double C_i = (1. + gm_ * std::pow(dep_, ke_)) /
-                     (1. + eta_ * gm_ * std::pow(dep_, ke_));
+  // Plastic shear modulus
+  const double Cg = std::max(0.05, 1. / (1. + gm_ * std::pow(dep_, ke_)));
 
-  double temp = std::max((rho_ / rho_bar_), 1.E-5);
-  // double temp_a = (1. - std::exp(1. - mean_p / p_min_));
-  double temp_b = std::min(temp, 1.);
-  double temp_c = Rm_ / Rf_;
-  double temp_d = mean_p / p_max_;
+  const double m = std::pow(std::min(2. * Rm_ / rho_bar_, 50.), ka_);
 
-  // w_m parameter
-  double w_m = 0.;
+  const double rho_ratio = std::min(std::max((rho_ / rho_bar_), 1.E-5), 1.);
+  const double rho_ratio_pow = 1. / std::max(std::pow(rho_ratio, m), 1.0E-10);
+
+  const double Hr = Cg * G * hr_ * (rho_ratio_pow * (Rf_ / Rm_) - 1);
+
+  // Plastic bulk modulus
+  const double Ci = (1. + gm_ * std::pow(dep_, ke_)) /
+                    (1. + eta_ * gm_ * std::pow(dep_, ke_));
+
+  double wm = 0.;
   if (kr_ < 100.) {
+    wm = std::pow((mean_p / p_max_), a_pow_) * std::pow((Rm_ / Rf_), b_pow_) *
+         (1. / kr_);
     if (fp_ < 1.) {
-      w_m = std::pow(temp_d, a_pow_) * std::pow(temp_c, b_pow_) *
-            ((Rd_ - Rm_) / (Rf_ - Rm_)) * (1. / kr_);
-    } else {
-      // NOT CHECKED ///////////////////////////////////////////////////////////
-      w_m = std::pow(temp_d, a_pow_) * std::pow(temp_c, b_pow_) * (1. / kr_);
+      wm *= ((Rd_ - Rm_) / (Rf_ - Rm_));
     }
-  } else {
-    // NOT CHECKED /////////////////////////////////////////////////////////////
-    w_m = 0.;
   }
 
-  // power m
-  double m = std::pow(std::min(2. * Rm_ / rho_bar_, 50.), ka_);
-  double tmp = std::pow(temp_b, m);
-  double temp_e = 1. / std::max(tmp, 1.0E-10);
-
-  // Hardening (?)
-  double Hr = C_g * G * hr_ * (temp_e / temp_c - 1);
-  double Hr_over_G = Hr / G;
-
-  // w_r parameter
-  double w_r = 0.;
+  double wr = 0.;
   if (d_ < 100.) {
-    double is = std::pow(std::max((p_max_ / p_atm_), 1.), ks_);
-    w_r = is * std::pow(temp_c, d_) * (rho_d_ - rho_) * std::pow(rho_, m);
-  } else {
-    // NOT CHECKED /////////////////////////////////////////////////////////////
-    w_r = 0.;
+    wr = std::pow(std::max((p_max_ / p_atm_), 1.), ks_) *
+         std::pow((Rm_ / Rf_), d_) * (rho_d_ - rho_) * std::pow(rho_, m);
   }
 
-  // pick w_m or w_r
-  double factor = 0.;
-  if (temp_b < 1.) {
-    factor = std::pow(temp_b, 30.);
-  } else {
-    factor = 1.0;
-  }
-  const double w = w_r * (1. - factor) + w_m * factor;
+  const double w_factor = (rho_ratio < 1.) ? std::pow(rho_ratio, 30.) : 1.0;
+  const double w = wr * (1. - w_factor) + wm * w_factor;
 
-  // std::cout << "\nw : " << w << std::endl;
-
-  const double kri = w / K / C_i;  // probably delete
-  const double kokr = w / C_i;
+  const double Kr = Ci * K / w;
 
   // Elastic stress increment
   const Matrix6x6 de = this->compute_elastic_tensor(sigma, state_vars);
@@ -393,7 +365,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   double drm = std::sqrt(frobenius_prod(dev_dstrain, dev_dstrain));
 
   // sum
-  double sum = frobenius_prod(dev_dstrain, nl);
+  double sum = frobenius_prod(dev_dstrain, n_bar);
 
   dot *= (1. / drm);
 
@@ -416,6 +388,8 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   // dr_ij
   Vector6d dr_ij = Vector6d::Zero();
 
+  const double kokr = w / Ci;  // TODO : get rid of me!!
+
   // Either loading or unloading
   if (sum >= 0.) {
     // Loading continues
@@ -423,8 +397,8 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     if (mean_p > p_max_) p_max_ = mean_p;
 
     // Elasto-plastic coefficients
-    const double Ar = 0.5 * Hr_over_G + 1.;
-    const double Ap = Hr_over_G * G_over_K * kokr;
+    const double Ar = 0.5 * Hr / G + 1.;
+    const double Ap = Hr / G * G_over_K * kokr;
     const double Bp = 2. * G_over_K;
     const double Br = frobenius_prod(dev_r, normal);
     const double c2 = (Ar * Bp) - (Ap * Br);
@@ -437,7 +411,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     // Qp
     double dQp = (-1. / c2) * frobenius_prod(dstrain_t, Qp);
     // Pr
-    const double temp_pr = 0.5 * kokr * Hr_over_G;
+    const double temp_pr = 0.5 * kokr * Hr / G;
     Vector6d Pr = normal;
     for (unsigned i; i < 3; ++i) Pr(i) += temp_pr;
 
