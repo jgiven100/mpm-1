@@ -102,6 +102,11 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! Inline ternary function to check number not greater than one
   inline double check_one(double val) { return (val < 1.0 ? val : 1.0); }
 
+  //! Compute Frobenius norm
+  //! \param[in] vec_A vector form of 2D matrix (i.e., Voigt notation)
+  //! \retval Frobenius norm of 1 matrix
+  double frobenius_norm(const Vector6d& vec_A);
+
   //! Compute Frobenius inner product
   //! \param[in] vec_A vector form of 2D matrix (i.e., Voigt notation)
   //! \param[in] vec_B vector form of 2D matrix (i.e., Voigt notation)

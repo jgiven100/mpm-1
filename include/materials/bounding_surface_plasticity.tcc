@@ -128,12 +128,27 @@ std::vector<std::string> mpm::BoundSurfPlasticity<Tdim>::state_variables()
   return state_vars;
 }
 
+//! Compute Frobenius norm
+template <unsigned Tdim>
+double mpm::BoundSurfPlasticity<Tdim>::frobenius_norm(const Vector6d& vec_A) {
+  // Solves:
+  // sqrt(A_ij A_ij) = sqrt[(A_00*A_00 + A_11*A_11 + A_22*A_22)
+  //                        + 2*(A_01*A_01 + A_12*A_12 + A_02*A_02)]
+  // Note that matrices are assumed symmtric and provided in [6x1] form
+  double product = 0.;
+  for (unsigned i = 0; i < 3; ++i) {
+    product += (vec_A(i) * vec_A(i)) + (2. * (vec_A(i + 3) * vec_A(i + 3)));
+  }
+  const double norm = std::sqrt(product);
+  return norm;
+}
+
 //! Compute Frobenius inner product
 template <unsigned Tdim>
 double mpm::BoundSurfPlasticity<Tdim>::frobenius_prod(const Vector6d& vec_A,
                                                       const Vector6d& vec_B) {
   // Solves:
-  // (A_ij B_ij) = (A_00*B_00 + A_11*B11 + A_22*B_22)
+  // (A_ij B_ij) = (A_00*B_00 + A_11*B_11 + A_22*B_22)
   //                + 2*(A_01*B_01 + A_12*B_12 + A_02*B_02)
   // Note that matrices are assumed symmtric and provided in [6x1] form
   double product = 0.;
@@ -202,8 +217,9 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   // Save stress as muteable vector
   Vector6d sigma = stress;
 
-  // Note that dstrain (engineering) should be converted to dstrain (true)
-  // for the Wang bounding surface plasticity model
+  // Note: dstrain (engineering shear strain) is converted to dstrain_t
+  //       (true shear strain) for easier tensor multiplication in the Wang
+  //       bounding surface plasticity model
   Vector6d dstrain_t = dstrain;
   for (unsigned i = 0; i < 3; ++i) dstrain_t(i + 3) *= 0.5;
 
@@ -215,7 +231,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     // Deviatoric stress ratio vector and invariant
     Vector6d dev_r = -1. * sigma / mean_p;
     for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
-    const double R = std::sqrt((frobenius_prod(dev_r, dev_r)));
+    const double R = frobenius_norm(dev_r);
 
     // Save for later
     p_max_ = mean_p;
@@ -261,7 +277,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   // Deviatoric stress ratio vector and invariant
   Vector6d dev_r = -1. * sigma / mean_p;
   for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
-  double R = std::sqrt((frobenius_prod(dev_r, dev_r)));
+  double R = frobenius_norm(dev_r);
 
   // Check if past maximum allowable R
   if (R > R_max_) {
@@ -272,7 +288,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     // Update deviatoric stress ratio and invariant
     dev_r = -1. * sigma / mean_p;
     for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1;
-    R = std::sqrt((frobenius_prod(dev_r, dev_r)));
+    R = frobenius_norm(dev_r);
   }
 
   // Normal to yield (pre-stress) surface
@@ -289,8 +305,8 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   } else {
     // NOT CHECKED /////////////////////////////////////////////////////////////
     // Compute rho
-    Vector6d r_less_a = dev_r - alpha_v_;
-    rho_ = std::sqrt((frobenius_prod(r_less_a, r_less_a)));
+    const Vector6d r_less_a = dev_r - alpha_v_;
+    rho_ = frobenius_norm(r_less_a);
 
     // Compute rho_bar
     const double a_less_r_norm = frobenius_prod((alpha_v_ - dev_r), alpha_v_);
@@ -302,10 +318,10 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
 
     // Project to yield (pre-stress) surface
     const Vector6d r_bar = alpha_v_ + (rho_bar_ / rho_) * r_less_a;
-    const double r_bar_scalar = std::sqrt((frobenius_prod(r_bar, r_bar)));
+    const double r_bar_norm = frobenius_norm(r_bar);
 
     // Normal to yield (pre-stress) surface
-    n_bar = r_bar / r_bar_scalar;
+    n_bar = r_bar / r_bar_norm;
   }
 
   // Elastic shear and bulk modulus
@@ -351,68 +367,67 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   // Elastic stress increment
   const Matrix6x6 de = this->compute_elastic_tensor(sigma, state_vars);
   const Vector6d dsigma_e = -1. * de * dstrain_t;
-  const double d_mean_p_e = check_low(mpm::materials::p(dsigma_e));
 
   // Deviatoric strain increment (compression positive)
-  const double vol_strain = -1. * (dstrain_t(0) + dstrain_t(1) + dstrain_t(2));
+  const double vol_dstrain = -1. * (dstrain_t(0) + dstrain_t(1) + dstrain_t(2));
   Vector6d dev_dstrain = -1. * dstrain_t;
-  for (unsigned i = 0; i < 3; ++i) dev_dstrain(i) -= (vol_strain / 3.);
+  for (unsigned i = 0; i < 3; ++i) dev_dstrain(i) -= (vol_dstrain / 3.);
 
-  // dot
-  double dot = frobenius_prod(dev_dstrain, dev_r);
-
-  // drm
-  double drm = std::sqrt(frobenius_prod(dev_dstrain, dev_dstrain));
-
-  // sum
-  double sum = frobenius_prod(dev_dstrain, n_bar);
-
-  dot *= (1. / drm);
-
-  // yn parameter (yield?)
-  double y = std::max(0., (dot * dot) + (Rf_ * Rf_) - (R * R));
-  y = -dot + std::sqrt(y);
-  const double yn = y / drm;
-
-  // Normal to FAILURE surface
-  Vector6d normal = dev_r + (dev_dstrain * yn);
-  double normal_temp = std::sqrt(frobenius_prod(normal, normal));
-  normal *= (1. / normal_temp);
+  ////////////////////////////////////////////////////////////////////////////////////////////////
 
   //
-  const double nd = Rm_ / Rf_;
-  normal = ((1. - nd) * normal) + (nd * dev_dstrain / drm);
-  normal_temp = std::sqrt(frobenius_prod(normal, normal));
-  normal *= (1. / normal_temp);
+  const double dev_dstrain_norm = frobenius_norm(dev_dstrain);
+  const double dot = frobenius_prod(dev_dstrain, dev_r) /
+                     dev_dstrain_norm;  // not sure what this is
+
+  // yn
+  const double y =
+      -dot + std::sqrt(std::max(0., (dot * dot) + (Rf_ * Rf_) -
+                                        (R * R)));  // not sure what this is
+  const double yn = y / dev_dstrain_norm;           // not sure what this is
+
+  // Normal to FAILURE surface
+  const Vector6d r_hat = dev_r + (dev_dstrain * yn);
+  const double r_hat_norm = frobenius_norm(r_hat);
+  const Vector6d n_hat = r_hat / r_hat_norm;
+
+  //////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // Combine n_bar and n_tilde
+  const Vector6d Ne = ((1. - (Rm_ / Rf_)) * n_hat) +
+                      ((Rm_ / Rf_) * dev_dstrain / dev_dstrain_norm);
+  const double Ne_norm = frobenius_norm(Ne);
+  const Vector6d n = Ne / Ne_norm;
 
   // dr_ij
   Vector6d dr_ij = Vector6d::Zero();
 
-  const double kokr = w / Ci;  // TODO : get rid of me!!
+  // Loading criteria
+  const bool loading = (frobenius_prod(dev_dstrain, n_bar) > 0.) ? true : false;
 
   // Either loading or unloading
-  if (sum >= 0.) {
+  if (loading) {
     // Loading continues
     // Updated maximum mean pressure
     if (mean_p > p_max_) p_max_ = mean_p;
 
     // Elasto-plastic coefficients
     const double Ar = 0.5 * Hr / G + 1.;
-    const double Ap = Hr / G * G_over_K * kokr;
+    const double Ap = (Hr / G) * G_over_K * (w / Ci);
     const double Bp = 2. * G_over_K;
-    const double Br = frobenius_prod(dev_r, normal);
+    const double Br = frobenius_prod(dev_r, n);
     const double c2 = (Ar * Bp) - (Ap * Br);
 
     // Qp
-    Vector6d Qp = normal * Bp;
+    Vector6d Qp = n * Bp;
     for (unsigned i; i < 3; ++i) Qp(i) -= Br;
 
     // Plastic increment
     // Qp
     double dQp = (-1. / c2) * frobenius_prod(dstrain_t, Qp);
     // Pr
-    const double temp_pr = 0.5 * kokr * Hr / G;
-    Vector6d Pr = normal;
+    const double temp_pr = 0.5 * (w / Ci) * (Hr / G);
+    Vector6d Pr = n;
     for (unsigned i; i < 3; ++i) Pr(i) += temp_pr;
 
     // Dp
@@ -434,7 +449,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     // Unloading begins
     // Reset projection center
     for (unsigned i; i < 6; ++i) alpha_v_(i) = -1. * (sigma(i) / mean_p) - 1.;
-    alpha_s_ = std::sqrt(frobenius_prod(alpha_v_, alpha_v_));
+    alpha_s_ = frobenius_norm(alpha_v_);
 
     // Update stress
     sigma -= dsigma_e;
@@ -450,7 +465,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   //
   dev_r = -1. * sigma / new_p;
   for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
-  R = std::sqrt((frobenius_prod(dev_r, dev_r)));
+  R = frobenius_norm(dev_r);
 
   //
   if (R > R_max_) {
@@ -459,7 +474,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   }
 
   //
-  const double dif = frobenius_prod(dr_ij, normal);
+  const double dif = frobenius_prod(dr_ij, n);
   const double devp = mean_p * dif / Hr;
   const double ddevp = std::sqrt(2.) * std::fabs(devp);
 
