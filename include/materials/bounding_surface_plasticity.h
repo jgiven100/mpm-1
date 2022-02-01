@@ -129,10 +129,10 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double density_{std::numeric_limits<double>::max()};
   //! Cumulative plastic deviatoric strain
   double dep_{std::numeric_limits<double>::max()};
-  //! Initial void ratio
-  double e0_{std::numeric_limits<double>::max()};
+  //! Critical void ratio
+  double ec_{std::numeric_limits<double>::max()};
   //! CSL void ratio intercept
-  double e_int_{std::numeric_limits<double>::max()};
+  double e0_{std::numeric_limits<double>::max()};
   //! Input parameter: Ci function eta coefficient
   double eta0_{std::numeric_limits<double>::max()};
   //! Model parameter: Ci function eta coefficient
@@ -153,7 +153,7 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double hr0_{std::numeric_limits<double>::max()};
   //! Model parameter: Hr function hr coefficient
   double hr_{std::numeric_limits<double>::max()};
-  //! Model parameter: m function ka
+  //! Model parameter: m function ka power
   double ka_{std::numeric_limits<double>::max()};
   //! Model parameter: Ci and Cg function ke power
   double ke_{std::numeric_limits<double>::max()};
