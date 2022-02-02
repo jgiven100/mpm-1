@@ -3,7 +3,7 @@
 
 #include <cmath>
 #include <iomanip>
-#include <iostream>
+#include <iostream>  // TODO : remove me!!
 
 #include "Eigen/Dense"
 
@@ -121,9 +121,9 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! Model parameter: wm function a power
   double a_pow_{std::numeric_limits<double>::max()};
   //! Previous stress reversal point
-  double alpha_s_{std::numeric_limits<double>::max()};
+  Eigen::Matrix<double, 6, 1> alpha_{Vector6d::Zero()};
   //! Previous stress reversal point
-  Eigen::Matrix<double, 6, 1> alpha_v_{Vector6d::Zero()};
+  double alpha_norm_{std::numeric_limits<double>::max()};
   //! Model parameter: wm function b power
   double b_pow_{std::numeric_limits<double>::max()};
   //! Input parameter: wr function d power
@@ -134,10 +134,10 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double density_{std::numeric_limits<double>::max()};
   //! Cumulative plastic deviatoric strain
   double dep_{std::numeric_limits<double>::max()};
-  //! Critical void ratio
-  double ec_{std::numeric_limits<double>::max()};
   //! CSL void ratio intercept
   double e0_{std::numeric_limits<double>::max()};
+  //! Critical void ratio
+  double ec_{std::numeric_limits<double>::max()};
   //! Input parameter: Ci function eta coefficient
   double eta0_{std::numeric_limits<double>::max()};
   //! Model parameter: Ci function eta coefficient
