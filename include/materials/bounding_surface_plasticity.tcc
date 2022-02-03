@@ -274,6 +274,15 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     mean_p = p_min_;
   }
 
+  // ADDED BY JSG //////////////////////////////////////////////////////////////
+  // State index parameter
+  const double Ip = mean_p / pc_;
+
+  // Dilation surface
+  const double Rp = fp_ * Rf_;
+  Rd_ = Rp + (Rf_ - Rp) * Ip;
+  //////////////////////////////////////////////////////////////////////////////
+
   // Deviatoric stress ratio vector and invariant
   Vector6d dev_r = -1. * sigma / mean_p;
   for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
@@ -327,7 +336,6 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   const double G = p_atm_ * G0_ * (std::pow((2.973 - ec_), 2) / (1. + ec_)) *
                    std::sqrt(mean_p / p_atm_);
   const double K = (2. * G * (1. + poisson_)) / (3 * (1 - 2 * poisson_));
-  const double G_over_K = G / K;
 
   // Plastic shear modulus
   const double Cg = std::max(0.05, 1. / (1. + gm_ * std::pow(dep_, ke_)));
@@ -364,8 +372,8 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   const double Kr = Ci * K / w;
 
   // Elastic stress increment
-  const Matrix6x6 de = this->compute_elastic_tensor(sigma, state_vars);
-  const Vector6d dsigma_e = -1. * de * dstrain_t;
+  const Matrix6x6 De = this->compute_elastic_tensor(sigma, state_vars);
+  const Vector6d dsigma_e = -1. * De * dstrain_t;
 
   // Deviatoric strain increment
   const double vol_dstrain = -1. * (dstrain_t(0) + dstrain_t(1) + dstrain_t(2));
@@ -396,8 +404,8 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   const double Ne_norm = frobenius_norm(Ne);
   const Vector6d n = Ne / Ne_norm;
 
-  // dr_ij
-  Vector6d dr_ij = Vector6d::Zero();
+  // dev_dr
+  Vector6d dev_dr = Vector6d::Zero();
 
   // Check loading status
   const bool loading = (frobenius_prod(dev_dstrain, n_bar) > 0.) ? true : false;
@@ -408,30 +416,40 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     // Updated maximum mean pressure
     if (mean_p > p_max_) p_max_ = mean_p;
 
-    // Elasto-plastic coefficients
+    // Plastic coefficients
+    // FISH CODE ///////////////////////////////////////////////////////////////
     const double Ar = 0.5 * Hr / G + 1.;
-    const double Ap = (Hr / G) * G_over_K * (w / Ci);
-    const double Bp = 2. * G_over_K;
+    const double Ap = (Hr / G) * (G / K) * (w / Ci);
+    const double Bp = 2. * (G / K);
     const double Br = frobenius_prod(dev_r, n);
     const double c2 = (Ar * Bp) - (Ap * Br);
+    // 2018 PAPER //////////////////////////////////////////////////////////////
+    // const double Ar = 2. * G / Hr + 1.;
+    // const double Ap = 2. * G / Kr;
+    // const double Bp = 2. * G / K;
+    // const double Br = frobenius_prod(dev_r, n);
+    // const double c2 = (Ar * Bp) - (Ap * Br);
 
-    // Qp
+    // Qp plastic tensor
     Vector6d Qp = n * Bp;
     for (unsigned i; i < 3; ++i) Qp(i) -= Br;
 
-    // Plastic increment
-    // Qp
-    double dQp = (-1. / c2) * frobenius_prod(dstrain_t, Qp);
-    // Pr
-    const double temp_pr = 0.5 * (w / Ci) * (Hr / G);
-    Vector6d Pr = n;
-    for (unsigned i; i < 3; ++i) Pr(i) += temp_pr;
+    // Qp plastic increment
+    const double dQp = (-1. / c2) * frobenius_prod(Qp, dstrain_t);
 
-    // Dp
+    // Pr plastic tensor
+    // FISH CODE ///////////////////////////////////////////////////////////////
+    Vector6d Pr = n;
+    for (unsigned i; i < 3; ++i) Pr(i) += 0.5 * (w / Ci) * (Hr / G);
+    // 2018 PAPER //////////////////////////////////////////////////////////////
+    // Vector6d Pr = (2. * G / Hr) * n;
+    // for (unsigned i; i < 3; ++i) Pr(i) += (K / Kr);
+
+    // Plastic stiffness matrix
     Vector6d Dp = 2. * G * Pr * dQp;
 
-    // update stress
-    sigma -= dsigma_e + Dp;
+    // Update stress
+    sigma += (-dsigma_e + Dp);
 
     //
     double dp = ((dsigma_e(0) + dsigma_e(1) + dsigma_e(2)) / 3.) -
@@ -439,7 +457,7 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     mean_p = check_low(-1. * mpm::materials::p(sigma));
 
     //
-    dr_ij = (dsigma_e - Dp + sigma * dp / mean_p) / mean_p;
+    dev_dr = (dsigma_e - Dp + sigma * dp / mean_p) / mean_p;
 
   } else {
     // NOT CHECKED /////////////////////////////////////////////////////////////
@@ -465,15 +483,17 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
   R = frobenius_norm(dev_r);
 
-  //
+  // Check if past maximum allowable R
   if (R > R_max_) {
+    // Update stress
     sigma *= (R_max_ / R);
-    for (unsigned i = 0; i < 3; ++i) sigma(i) -= new_p * (1. - (R_max_ / R));
+    for (unsigned i = 0; i < 3; ++i) sigma(i) -= (new_p * (1. - (R_max_ / R)));
   }
 
   //
-  const double dif = frobenius_prod(dr_ij, n);
-  const double devp = mean_p * dif / Hr;
+  const double dif = frobenius_prod(dev_dr, n);
+  const double devp = mean_p * dif / (Hr + tolerance_);
+  // const double devp = new_p * dif / (Hr + tolerance_);
   const double ddevp = std::sqrt(2.) * std::fabs(devp);
 
   // check
@@ -483,12 +503,15 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   //
   if (Rm_ - Rd_ > 0.) dep_ += sum_dep;
 
-  // State index parameter
-  double Ip = mean_p / pc_;
+  // MOVED TO TOP BY JSG ///////////////////////////////////////////////////////
+  // // State index parameter
+  // double Ip = mean_p / pc_;
+  // // double Ip = new_p / pc_;
 
-  // Dilation surface
-  double Rp = fp_ * Rf_;
-  Rd_ = Rp + (Rf_ - Rp) * Ip;
+  // // Dilation surface
+  // double Rp = fp_ * Rf_;
+  // Rd_ = Rp + (Rf_ - Rp) * Ip;
+  //////////////////////////////////////////////////////////////////////////////
 
   // Return updated stress
   return (sigma);
