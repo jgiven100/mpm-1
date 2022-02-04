@@ -274,14 +274,12 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     mean_p = p_min_;
   }
 
-  // ADDED BY JSG //////////////////////////////////////////////////////////////
   // State index parameter
   const double Ip = mean_p / pc_;
 
   // Dilation surface
   const double Rp = fp_ * Rf_;
   Rd_ = Rp + (Rf_ - Rp) * Ip;
-  //////////////////////////////////////////////////////////////////////////////
 
   // Deviatoric stress ratio vector and invariant
   Vector6d dev_r = -1. * sigma / mean_p;
@@ -451,16 +449,15 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     // Update stress
     sigma += (-dsigma_e + Dp);
 
-    //
+    // Change in mean pressure
     double dp = ((dsigma_e(0) + dsigma_e(1) + dsigma_e(2)) / 3.) -
                 (2. * G * dQp * (Pr(0) + Pr(1) + Pr(2)) * (1. / 3.));
     mean_p = check_low(-1. * mpm::materials::p(sigma));
 
-    //
+    // Incremental deviatoric stress ratio vector
     dev_dr = (dsigma_e - Dp + sigma * dp / mean_p) / mean_p;
 
   } else {
-    // NOT CHECKED /////////////////////////////////////////////////////////////
     // Unloading begins
     // Reset projection center
     alpha_ = -1. * sigma / mean_p;
@@ -471,14 +468,14 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     sigma -= dsigma_e;
   }
 
-  //
+  // Check minimum allowalbe mean pressure
   double new_p = check_low(-1. * mpm::materials::p(sigma));
   if (new_p < p_min_) {
     for (unsigned i; i < 3; ++i) sigma(i) *= (p_min_ / new_p);
     new_p = p_min_;
   }
 
-  //
+  // Deviatoric stress ratio vector and invariant
   dev_r = -1. * sigma / new_p;
   for (unsigned i = 0; i < 3; ++i) dev_r(i) -= 1.;
   R = frobenius_norm(dev_r);
@@ -490,28 +487,16 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     for (unsigned i = 0; i < 3; ++i) sigma(i) -= (new_p * (1. - (R_max_ / R)));
   }
 
-  //
-  const double dif = frobenius_prod(dev_dr, n);
-  const double devp = mean_p * dif / (Hr + tolerance_);
-  // const double devp = new_p * dif / (Hr + tolerance_);
-  const double ddevp = std::sqrt(2.) * std::fabs(devp);
+  // Loading index
+  const double L = mean_p * frobenius_prod(dev_dr, n) / Hr;
+  const double ddevp = std::sqrt(2.) * std::fabs(L);
 
-  // check
+  // If Hr too small, ddevp is too big; use 1. as arbitrary cutoff 
   double sum_dep = ddevp;
   if (sum_dep > 1.) sum_dep = 0.;
 
-  //
+  // Only consider strain if pre-stress surface is past dilation surface
   if (Rm_ - Rd_ > 0.) dep_ += sum_dep;
-
-  // MOVED TO TOP BY JSG ///////////////////////////////////////////////////////
-  // // State index parameter
-  // double Ip = mean_p / pc_;
-  // // double Ip = new_p / pc_;
-
-  // // Dilation surface
-  // double Rp = fp_ * Rf_;
-  // Rd_ = Rp + (Rf_ - Rp) * Ip;
-  //////////////////////////////////////////////////////////////////////////////
 
   // Return updated stress
   return (sigma);
