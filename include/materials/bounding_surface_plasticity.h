@@ -122,8 +122,6 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double a_pow_{std::numeric_limits<double>::max()};
   //! Previous stress reversal point
   Eigen::Matrix<double, 6, 1> alpha_{Vector6d::Zero()};
-  //! Previous stress reversal point
-  double alpha_norm_{std::numeric_limits<double>::max()};
   //! Model parameter: wm function b power
   double b_pow_{std::numeric_limits<double>::max()};
   //! Input parameter: wr function d power
