@@ -213,6 +213,22 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     const Vector6d& stress, const Vector6d& dstrain,
     const ParticleBase<Tdim>* ptr, mpm::dense_map* state_vars) {
 
+  // SIGN CONVENTION OF VARIOUS STRESS AND STRAIN VARIABLES
+  // ---------------------------------------------------------------------------
+  // NAME       | SIGN          | NOTES
+  // ---------------------------------------------------------------------------
+  // dstrain    | tension +     | passed vector, engineering shear strain
+  // dstrain_t  | tension +     | true shear strain
+  // dstrain_e  | compression + |
+  // dstrain_p  | compression + |
+  // dstrain_vp | compression + | (>0) -> contraction; (<0) -> dilation
+  // stress     | tension +     | passed vector
+  // sigma      | tension +     | mutable stress vector
+  // dsigma     | tension +     |
+  // mean_dp    | compression + |
+  // ds         | compression + | incremental deviatoric stress
+  // ---------------------------------------------------------------------------
+
   // Save stress as muteable vector
   Vector6d sigma = stress;
 
