@@ -124,6 +124,10 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   Eigen::Matrix<double, 6, 1> alpha_{Vector6d::Zero()};
   //! Model parameter: wm function b power
   double b_pow_{std::numeric_limits<double>::max()};
+  //! Loading direction representation cos(alpha)
+  double cos_a_{std::numeric_limits<double>::max()};
+  //! Input parameter: dz function cz coefficient
+  double cz_{std::numeric_limits<double>::max()};
   //! Input parameter: wr function d power
   double d0_{std::numeric_limits<double>::max()};
   //! Model parameter: wr function d power
@@ -136,10 +140,6 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double e0_{std::numeric_limits<double>::max()};
   //! Critical void ratio
   double ec_{std::numeric_limits<double>::max()};
-  //! Input parameter: Ci function eta coefficient
-  double eta0_{std::numeric_limits<double>::max()};
-  //! Model parameter: Ci function eta coefficient
-  double eta_{std::numeric_limits<double>::max()};
   //! Initialization bool
   bool first_loop_{true};
   //! Ratio fp = Rp / Rf
@@ -148,18 +148,12 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double friction_{std::numeric_limits<double>::max()};
   //! Shear modulus model parameter
   double G0_{std::numeric_limits<double>::max()};
-  //! Input parameter: Ci and Cg functions gm coefficient
-  double gm0_{std::numeric_limits<double>::max()};
-  //! Model parameter: Ci and Cg functions gm coefficient
-  double gm_{std::numeric_limits<double>::max()};
   //! Input parameter: Hr function hr coefficient
   double hr0_{std::numeric_limits<double>::max()};
   //! Model parameter: Hr function hr coefficient
   double hr_{std::numeric_limits<double>::max()};
   //! Model parameter: m function ka power
   double ka_{std::numeric_limits<double>::max()};
-  //! Model parameter: Ci and Cg function ke power
-  double ke_{std::numeric_limits<double>::max()};
   //! Input parameter: wm function kr coefficient
   double kr0_{std::numeric_limits<double>::max()};
   //! Model parameter: wm function kr coefficient
@@ -168,6 +162,8 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double ks_{std::numeric_limits<double>::max()};
   //! Critial state slope
   double lambda_{std::numeric_limits<double>::max()};
+  //! Last stress state
+  Eigen::Matrix<double, 6, 1> last_sigma_{Vector6d::Zero()};
   //! Reference (atmospheric) pressure
   double p_atm_{std::numeric_limits<double>::max()};
   //! Max mean pressure
@@ -178,6 +174,8 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double pc_{std::numeric_limits<double>::max()};
   //! Poisson ratio
   double poisson_{std::numeric_limits<double>::max()};
+  //! Proportional loading input flag for cos(alpha) calculations
+  bool proportional_{true};
   //! Maximum allowable R
   double R_max_{std::numeric_limits<double>::max()};
   //! Dilation surface
@@ -198,6 +196,10 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double rho_d_{std::numeric_limits<double>::max()};
   //! Default tolerance
   double tolerance_{std::numeric_limits<double>::epsilon()};
+  //! Model parameter: Cz function z coefficient
+  double z_{std::numeric_limits<double>::max()};
+  //! Input parameter: dz function zm coefficient
+  double zm_{std::numeric_limits<double>::max()};
   //! Failure state map
   std::map<int, mpm::boundsurfplasticity::FailureState> yield_type_ = {
       {0, mpm::boundsurfplasticity::FailureState::Elastic},
