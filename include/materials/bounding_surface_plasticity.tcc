@@ -80,8 +80,6 @@ mpm::BoundSurfPlasticity<Tdim>::BoundSurfPlasticity(
     b_pow_ = 2.;
     // Model parameter: wr function d power
     d_ = scale(2.0, relative_density_) * d0_;
-    // Cumulative plastic deviatoric strain set zero at start
-    dep_ = 0.;
     // Model parameter: Hr function hr coefficient
     hr_ = scale(1.5, relative_density_) * hr0_;
     // Model parameter: m function ka power
@@ -345,7 +343,9 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   Vector6d dsigma = sigma - this->last_sigma_;
 
   // Incremental mean stress
-  const double mean_dp = check_low(-1. * mpm::materials::p(dsigma));
+  // Think if check_low is correct
+  // const double mean_dp = check_low(-1. * mpm::materials::p(dsigma));
+  const double mean_dp = -1. * mpm::materials::p(dsigma);
 
   // Incremental deviatoric stress
   Vector6d ds = -1. * dsigma;
@@ -516,17 +516,6 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
     sigma *= (R_max_ / R);
     for (unsigned i = 0; i < 3; ++i) sigma(i) -= (new_p * (1. - (R_max_ / R)));
   }
-
-  // Loading index
-  const double L = mean_p * frobenius_prod(dev_dr, n) / Hr;
-  const double ddevp = std::sqrt(2.) * std::fabs(L);
-
-  // If Hr too small, ddevp is too big; use 1. as arbitrary cutoff
-  double sum_dep = ddevp;
-  if (sum_dep > 1.) sum_dep = 0.;
-
-  // Only consider strain if pre-stress surface is past dilation surface
-  if (Rm_ - Rd_ > 0.) dep_ += sum_dep;
 
   // Return updated stress
   return (sigma);

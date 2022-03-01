@@ -134,8 +134,6 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   double d_{std::numeric_limits<double>::max()};
   //! Density
   double density_{std::numeric_limits<double>::max()};
-  //! Cumulative plastic deviatoric strain
-  double dep_{std::numeric_limits<double>::max()};
   //! CSL void ratio intercept
   double e0_{std::numeric_limits<double>::max()};
   //! Critical void ratio
