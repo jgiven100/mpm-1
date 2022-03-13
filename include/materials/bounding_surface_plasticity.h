@@ -85,6 +85,20 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   Eigen::Matrix<double, 6, 6> compute_elastic_tensor(
       const Vector6d& stress, mpm::dense_map* state_vars);
 
+  //! Compute constitutive relations matrix for elasto-plastic material
+  //! \param[in] stress Stress
+  //! \param[in] dstrain Strain
+  //! \param[in] particle Constant point to particle base
+  //! \param[in] state_vars History-dependent state variables
+  //! \param[in] hardening Boolean to consider hardening, default=true. If
+  //! perfect-plastic tensor is needed pass false
+  //! \retval dmatrix Constitutive relations mattrix
+  Matrix6x6 compute_elasto_plastic_tensor(const Vector6d& stress,
+                                          const Vector6d& dstrain,
+                                          const ParticleBase<Tdim>* ptr,
+                                          mpm::dense_map* state_vars,
+                                          bool hardening = true) override;
+
   //! Compute fabric dilatancy term Cz
   //! \param[in] stress Stress
   //! \param[in] dstrain Incremental strain
@@ -99,25 +113,26 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! \param[in] stress Stress
   void compute_first_loop(const Vector6d& stress);
 
+  //! Compute plastic shear modulus coefficient Hr
+  //! \param[in] Cz fabric dilatancy term
+  //! \param[in] G Shear modulus
+  //! \param[in] R Deviatoric stress ratio invariant
+  //! \param[in] m Plastic shear modulus power
+  //! \retval plastic shear modulus coefficient Hr
+  double compute_Hr(const double& Cz, const double& G, const double& R,
+                    const double& m);
+
+  //! Compute unit normal to yield surface (dstrain)
+  //! \param[in] dev_r Deviatoric stress ratio vector
+  //! \param[in] dstrain Strain increment vector
+  //! \retval unit normal to yield surface (dstrain)
+  Vector6d compute_n(const Vector6d& dev_r, const Vector6d& dstrain);
+
   //! Compute unit normal to yield (pre-stress) surface
   //! \param[in] dev_r Deviatoric stress ratio vector
   //! \param[in] Rd Dilation surface
   //! \retval unit normal to yield (pre-stress) surface
   Vector6d compute_n_bar(const Vector6d& dev_r, const double& Rd);
-
-  //! Compute constitutive relations matrix for elasto-plastic material
-  //! \param[in] stress Stress
-  //! \param[in] dstrain Strain
-  //! \param[in] particle Constant point to particle base
-  //! \param[in] state_vars History-dependent state variables
-  //! \param[in] hardening Boolean to consider hardening, default=true. If
-  //! perfect-plastic tensor is needed pass false
-  //! \retval dmatrix Constitutive relations mattrix
-  Matrix6x6 compute_elasto_plastic_tensor(const Vector6d& stress,
-                                          const Vector6d& dstrain,
-                                          const ParticleBase<Tdim>* ptr,
-                                          mpm::dense_map* state_vars,
-                                          bool hardening = true) override;
 
   //! Compute dilation surface
   //! \param[in] mean_p Current mean stress
@@ -138,11 +153,10 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! \param[in] mean_p Current mean stress
   //! \param[in] R Current deviatoric stress invariant
   //! \param[in] m Plastic modulus power
-  //! \param[in] rho_ratio Ratio of rho and rho_bar
   //! \param[in] Rd Stress invariant for current dilation surface
   //! \retval plastic bulk modulus coefficient w
   double compute_w(const double& mean_p, const double& R, const double& m,
-                   const double& rho_ratio, const double& Rd);
+                   const double& Rd);
 
   //!  Convert strain from engineering to true shear strain
   //! \param[in] dstrain Incremental strain
@@ -160,9 +174,28 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! \retval Frobenius innner product of 2 matrices
   double frobenius_prod(const Vector6d& vec_A, const Vector6d& vec_B);
 
+  //! Set loading bool
+  //! \param[in] dev_dstrain Deviatoric strain (engineering shear) increment
+  //! \param[in] n_bar Normal to yield surface (incremental stress dependent)
+  //! \retval bool for loading status
+  bool set_loading(const Vector6d& dev_dstrain, const Vector6d& n_bar);
+
+  //! Set loading direction
+  //! \param[in] dev_dr Deviatoric stress ratio vector increment
+  //! \param[in] dev_r Deviatoric stress ratio vector
+  //! \param[in] loading Bool for loading or unloading
+  //! \retval cos(a) value
+  double set_loading_dir(const Vector6d& dev_dr, const Vector6d& dev_r,
+                         const bool& loading);
+
   //! Inline function to scale
-  inline double scale(double factor, double Dr) {
+  inline double scale(const double& factor, const double& Dr) {
     return (2. - factor + 2. * (factor - 1.) * Dr);
+  }
+
+  //! Inline function to get trace of 3x3 tensor (Voigt notation)
+  inline double trace(const Vector6d& vec) {
+    return (vec(0) + vec(1) + vec(2));
   }
 
   //! Model parameter: wm function a power
