@@ -15,7 +15,7 @@
 #include "particle.h"
 
 //! Check Bounding Surface Plasticity class in 3D
-TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlasticity][3D]") {
+TEST_CASE("Bound Surface Plasticity (non-proportional) is checked in 3D", "[material][BoundSurfPlasticity][3D]") {
   // Tolerance
   const double Tolerance = 1.E-7;
 
@@ -33,74 +33,20 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
   // Testing
   jmaterial["density"] = 2000.;
   jmaterial["friction"] = 28.;
-  jmaterial["G0"] = 100.;
+  jmaterial["G0"] = 70.;
   jmaterial["poisson_ratio"] = 0.33;
   jmaterial["critical_void_ratio"] = 0.72;
   jmaterial["relative_density"] = 0.43;
   jmaterial["hr0"] = 0.25;
-  jmaterial["kr0"] = 0.2;
+  jmaterial["kr0"] = 4;
   jmaterial["d0"] = 2.5;
   jmaterial["fp"] = 0.5;
-  jmaterial["proportional"] = true;
+  jmaterial["proportional"] = false;
   jmaterial["cz"] = 20;
   jmaterial["zm"] = 5.5;
 
-  // // Check triaxial drain test
-  // SECTION("BoundSurfPlasticity sin wave isotropic") {
-  //   unsigned id = 0;
-  //   auto material =
-  //       Factory<mpm::Material<Dim>, unsigned, const Json&>::instance()->create(
-  //           "BoundSurfPlasticity3D", std::move(id), jmaterial);
-  //   REQUIRE(material->id() == 0);
-
-  //   // Initialise stress
-  //   mpm::Material<Dim>::Vector6d stress;
-  //   stress.setZero();
-  //   stress(0) = -80000;
-  //   stress(1) = -80000;
-  //   stress(2) = -80001;
-
-  //   // Initialise dstrain
-  //   mpm::Material<Dim>::Vector6d dstrain;
-  //   dstrain.setZero();
-
-  //   // Compute updated stress
-  //   mpm::dense_map state_vars = material->initialise_state_variables();
-  //   std::ofstream myfile;
-  //   myfile.open("sine-isotropic.txt");
-
-  //   // Initialise shear strain
-  //   double shear_strain = 0.;
-  //   double new_total_shear = 0.;
-
-  //   // Sin wave scale factors
-  //   const double sin_ampli = -0.003;
-  //   const double sin_const = 2. * 3.14159265359 / (10000. / 5.);
-
-  //   // Loop
-  //   for (unsigned i = 0; i < 20000 + 1; ++i) {
-
-  //     // Set new total shear strain
-  //     new_total_shear = sin_ampli * sin(i * sin_const);
-
-  //     // Determine incremental value
-  //     dstrain(4) = new_total_shear - shear_strain;
-
-  //     // Save new total shear for next loop
-  //     shear_strain = new_total_shear;
-
-  //     stress = material->compute_stress(stress, dstrain, particle.get(),
-  //                                       &state_vars);
-
-  //     myfile << stress(0) << '\t' << stress(1) << '\t' << stress(2) << '\t'
-  //            << stress(3) << '\t' << stress(4) << '\t' << stress(5) << '\t'
-  //            << shear_strain << '\t' << dstrain(4) << '\n';
-  //   }
-  //   myfile.close();
-  // }
-
-  // Check triaxial drain test
-  SECTION("BoundSurfPlasticity stress control anisotropic") {
+  // Check circular loading path
+  SECTION("BoundSurfPlasticity circular loading path") {
     unsigned id = 0;
     auto material =
         Factory<mpm::Material<Dim>, unsigned, const Json&>::instance()->create(
@@ -111,8 +57,8 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
     mpm::Material<Dim>::Vector6d stress;
     stress.setZero();
     stress(0) = -41000;
-    stress(1) = -41000;
-    stress(2) = -82001;
+    stress(1) = -82001;
+    stress(2) = -61500;
 
     // Initialise dstrain
     mpm::Material<Dim>::Vector6d dstrain;
@@ -121,7 +67,7 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
     // Compute updated stress
     mpm::dense_map state_vars = material->initialise_state_variables();
     std::ofstream myfile;
-    myfile.open("stress-anisotropic.txt");
+    myfile.open("non-prop-circular.txt");
 
     // Initialise shear strain
     double shear_strain = 0.;
@@ -137,7 +83,7 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
     for (unsigned i = 0; i < 60000 + 1; ++i) {
 
       // Check stress ratio
-      if (std::fabs(stress(4)/82001) > 0.2 ) {
+      if (std::fabs(stress(3)/82001) > 0.2 ) {
         if (count > 10) {
           sign *= -1.;
           count = 0;
@@ -145,8 +91,8 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
       }
 
       // Set dstrain gamma_{23}
-      dstrain(4) = sign * -0.00001;
-      shear_strain += dstrain(4);
+      dstrain(3) = sign * -0.00001;
+      shear_strain += dstrain(3);
 
       stress = material->compute_stress(stress, dstrain, particle.get(),
                                         &state_vars);
@@ -160,24 +106,8 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
     myfile.close();
   }
 
-  // // Check triaxial drain test
-  // SECTION("BoundSurfPlasticity stress control circular") {
-
-  //   // Testing
-  //   jmaterial["density"] = 2000.;
-  //   jmaterial["friction"] = 28.;
-  //   jmaterial["G0"] = 70.;
-  //   jmaterial["poisson_ratio"] = 0.33;
-  //   jmaterial["critical_void_ratio"] = 0.72;
-  //   jmaterial["relative_density"] = 0.43;
-  //   jmaterial["hr0"] = 0.03;
-  //   jmaterial["kr0"] = 6.0;
-  //   jmaterial["d0"] = 0.0;
-  //   jmaterial["fp"] = 0.9;
-  //   jmaterial["proportional"] = false;
-  //   jmaterial["cz"] = 100;
-  //   jmaterial["zm"] = 2.5;
-
+  // // Check elliptical loading path
+  // SECTION("BoundSurfPlasticity elliptical loading path") {
   //   unsigned id = 0;
   //   auto material =
   //       Factory<mpm::Material<Dim>, unsigned, const Json&>::instance()->create(
@@ -188,8 +118,8 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
   //   mpm::Material<Dim>::Vector6d stress;
   //   stress.setZero();
   //   stress(0) = -41000;
-  //   stress(1) = -41000;
-  //   stress(2) = -82001;
+  //   stress(1) = -82001;
+  //   stress(2) = -61500;
 
   //   // Initialise dstrain
   //   mpm::Material<Dim>::Vector6d dstrain;
@@ -198,7 +128,7 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
   //   // Compute updated stress
   //   mpm::dense_map state_vars = material->initialise_state_variables();
   //   std::ofstream myfile;
-  //   myfile.open("circular.txt");
+  //   myfile.open("non-prop-elliptical.txt");
 
   //   // Initialise shear strain
   //   double shear_strain = 0.;
@@ -214,7 +144,7 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
   //   for (unsigned i = 0; i < 60000 + 1; ++i) {
 
   //     // Check stress ratio
-  //     if (std::fabs(stress(4)/82001) > 0.2 ) {
+  //     if (std::fabs(stress(3)/82001) > 0.2 ) {
   //       if (count > 10) {
   //         sign *= -1.;
   //         count = 0;
@@ -222,8 +152,8 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
   //     }
 
   //     // Set dstrain gamma_{23}
-  //     dstrain(4) = sign * -0.00001;
-  //     shear_strain += dstrain(4);
+  //     dstrain(3) = sign * -0.00001;
+  //     shear_strain += dstrain(3);
 
   //     stress = material->compute_stress(stress, dstrain, particle.get(),
   //                                       &state_vars);
@@ -237,4 +167,64 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
   //   myfile.close();
   // }
 
+  // // Check figure-8 loading path
+  // SECTION("BoundSurfPlasticity figure-8 loading path") {
+  //   unsigned id = 0;
+  //   auto material =
+  //       Factory<mpm::Material<Dim>, unsigned, const Json&>::instance()->create(
+  //           "BoundSurfPlasticity3D", std::move(id), jmaterial);
+  //   REQUIRE(material->id() == 0);
+
+  //   // Initialise stress
+  //   mpm::Material<Dim>::Vector6d stress;
+  //   stress.setZero();
+  //   stress(0) = -41000;
+  //   stress(1) = -82001;
+  //   stress(2) = -61500;
+
+  //   // Initialise dstrain
+  //   mpm::Material<Dim>::Vector6d dstrain;
+  //   dstrain.setZero();
+
+  //   // Compute updated stress
+  //   mpm::dense_map state_vars = material->initialise_state_variables();
+  //   std::ofstream myfile;
+  //   myfile.open("non-prop-figure8.txt");
+
+  //   // Initialise shear strain
+  //   double shear_strain = 0.;
+
+  //   myfile << stress(0) << '\t' << stress(1) << '\t' << stress(2) << '\t'
+  //          << stress(3) << '\t' << stress(4) << '\t' << stress(5) << '\t'
+  //          << shear_strain << '\n';
+
+  //   double sign = 1.0;
+  //   int count = 0;
+
+  //   // Loop
+  //   for (unsigned i = 0; i < 60000 + 1; ++i) {
+
+  //     // Check stress ratio
+  //     if (std::fabs(stress(3)/82001) > 0.2 ) {
+  //       if (count > 10) {
+  //         sign *= -1.;
+  //         count = 0;
+  //       }
+  //     }
+
+  //     // Set dstrain gamma_{23}
+  //     dstrain(3) = sign * -0.00001;
+  //     shear_strain += dstrain(3);
+
+  //     stress = material->compute_stress(stress, dstrain, particle.get(),
+  //                                       &state_vars);
+
+  //     myfile << stress(0) << '\t' << stress(1) << '\t' << stress(2) << '\t'
+  //            << stress(3) << '\t' << stress(4) << '\t' << stress(5) << '\t'
+  //            << shear_strain << '\n';
+
+  //     count += 1;
+  //   }
+  //   myfile.close();
+  // }
 } 

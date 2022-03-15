@@ -3,7 +3,6 @@
 
 #include <cmath>
 #include <iomanip>
-#include <iostream>  // TODO : remove me!!
 
 #include "Eigen/Dense"
 
@@ -60,10 +59,20 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! \param[in] dstrain Strain
   //! \param[in] particle Constant point to particle base
   //! \param[in] state_vars History-dependent state variables
-  //! \retval updated_stress Updated value of stress
+  //! \retval sigma Updated value of stress
   Vector6d compute_stress(const Vector6d& stress, const Vector6d& dstrain,
                           const ParticleBase<Tdim>* ptr,
                           mpm::dense_map* state_vars) override;
+
+  //! Compute strain
+  //! \param[in] stress Stress
+  //! \param[in] dstrain Strain
+  //! \param[in] particle Constant point to particle base
+  //! \param[in] state_vars History-dependent state variables
+  //! \retval updated_stress Updated value of stress
+  Vector6d compute_strain(const Vector6d& stress, const Vector6d& dstrain,
+                          const ParticleBase<Tdim>* ptr,
+                          mpm::dense_map* state_vars);
 
  protected:
   //! material id
@@ -82,6 +91,7 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! Compute elastic tensor
   //! \param[in] stress Stress
   //! \param[in] state_vars History-dependent state variables
+  //! \retval de Constitutive relations matrix
   Eigen::Matrix<double, 6, 6> compute_elastic_tensor(
       const Vector6d& stress, mpm::dense_map* state_vars);
 
@@ -92,7 +102,7 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! \param[in] state_vars History-dependent state variables
   //! \param[in] hardening Boolean to consider hardening, default=true. If
   //! perfect-plastic tensor is needed pass false
-  //! \retval dmatrix Constitutive relations mattrix
+  //! \retval Dep Constitutive relations matrix
   Matrix6x6 compute_elasto_plastic_tensor(const Vector6d& stress,
                                           const Vector6d& dstrain,
                                           const ParticleBase<Tdim>* ptr,
@@ -104,7 +114,7 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! \param[in] dstrain Incremental strain
   //! \param[in] G Shear modulus
   //! \param[in] K Bulk modulus
-  //! \retval fabric dilatancy term Cz
+  //! \retval Cz Fabric dilatancy term
   double compute_fabric_dilatancy(const Vector6d& stress,
                                   const Vector6d& dstrain, const double& G,
                                   const double& K);
@@ -118,25 +128,25 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! \param[in] G Shear modulus
   //! \param[in] R Deviatoric stress ratio invariant
   //! \param[in] m Plastic shear modulus power
-  //! \retval plastic shear modulus coefficient Hr
+  //! \retval Hr Plastic shear modulus coefficient
   double compute_Hr(const double& Cz, const double& G, const double& R,
                     const double& m);
 
-  //! Compute unit normal to yield surface (dstrain)
+  //! Compute unit normal to yield surface (incremental strain)
   //! \param[in] dev_r Deviatoric stress ratio vector
   //! \param[in] dstrain Strain increment vector
-  //! \retval unit normal to yield surface (dstrain)
+  //! \retval n Unit normal to yield surface (incremental strain)
   Vector6d compute_n(const Vector6d& dev_r, const Vector6d& dstrain);
 
-  //! Compute unit normal to yield (pre-stress) surface
+  //! Compute unit normal to yield surface (incremental stress)
   //! \param[in] dev_r Deviatoric stress ratio vector
   //! \param[in] Rd Dilation surface
-  //! \retval unit normal to yield (pre-stress) surface
+  //! \retval n_bar Unit normal to yield surface (incremental stress)
   Vector6d compute_n_bar(const Vector6d& dev_r, const double& Rd);
 
   //! Compute dilation surface
   //! \param[in] mean_p Current mean stress
-  //! \retval deviatoric stress invariant defining the dilation surface
+  //! \retval Rd Deviatoric stress invariant defining the dilation surface
   double compute_Rd(const double& mean_p);
 
   //! Compute volumetric plastic incremental strain
@@ -144,7 +154,7 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! \param[in] dstrain Incremental strain
   //! \param[in] G Shear modulus
   //! \param[in] K Bulk modulus
-  //! \retval volumetric plastic incremental strain
+  //! \retval dstrain_vp Volumetric plastic incremental strain
   double compute_volumetric_plastic_dstrain(const Vector6d& stress,
                                             const Vector6d& dstrain,
                                             const double& G, const double& K);
@@ -154,37 +164,37 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! \param[in] R Current deviatoric stress invariant
   //! \param[in] m Plastic modulus power
   //! \param[in] Rd Stress invariant for current dilation surface
-  //! \retval plastic bulk modulus coefficient w
+  //! \retval w Plastic bulk modulus coefficient
   double compute_w(const double& mean_p, const double& R, const double& m,
                    const double& Rd);
 
   //!  Convert strain from engineering to true shear strain
   //! \param[in] dstrain Incremental strain
-  //! \retval incremental strain with true shear strain values
+  //! \retval dstrain_t incremental strain with true shear strain values
   Vector6d convert_strain(const Vector6d& dstrain);
 
   //! Compute Frobenius norm
   //! \param[in] vec_A vector form of 2D matrix (i.e., Voigt notation)
-  //! \retval Frobenius norm of 1 matrix
+  //! \retval norm Frobenius norm of 1 matrix
   double frobenius_norm(const Vector6d& vec_A);
 
   //! Compute Frobenius inner product
   //! \param[in] vec_A vector form of 2D matrix (i.e., Voigt notation)
   //! \param[in] vec_B vector form of 2D matrix (i.e., Voigt notation)
-  //! \retval Frobenius innner product of 2 matrices
+  //! \retval product Frobenius innner product of 2 matrices
   double frobenius_prod(const Vector6d& vec_A, const Vector6d& vec_B);
 
   //! Set loading bool
   //! \param[in] dev_dstrain Deviatoric strain (engineering shear) increment
   //! \param[in] n_bar Normal to yield surface (incremental stress dependent)
-  //! \retval bool for loading status
+  //! \retval loading Bool for loading status
   bool set_loading(const Vector6d& dev_dstrain, const Vector6d& n_bar);
 
   //! Set loading direction
   //! \param[in] dev_dr Deviatoric stress ratio vector increment
   //! \param[in] dev_r Deviatoric stress ratio vector
   //! \param[in] loading Bool for loading or unloading
-  //! \retval cos(a) value
+  //! \retval cos_a Loading direction value
   double set_loading_dir(const Vector6d& dev_dr, const Vector6d& dev_r,
                          const bool& loading);
 

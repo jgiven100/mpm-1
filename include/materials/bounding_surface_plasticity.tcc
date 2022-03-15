@@ -286,9 +286,9 @@ Eigen::Matrix<double, 6, 6>
   const Matrix6x6 De = this->compute_elastic_tensor(stress, state_vars);
 
   // Combine tensors
-  const Matrix6x6 dep = De - Dp;
+  const Matrix6x6 Dep = De - Dp;
 
-  return dep;
+  return Dep;
 }
 
 //! Compute fabric dilatancy term Cz
@@ -810,5 +810,5 @@ Eigen::Matrix<double, 6, 1> mpm::BoundSurfPlasticity<Tdim>::compute_stress(
   }
 
   // Return updated stress
-  return (sigma);
+  return sigma;
 }
