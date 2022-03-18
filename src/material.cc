@@ -1,5 +1,6 @@
 #include "material.h"
 #include "bingham.h"
+#include "hyperbolic.h"
 #include "linear_elastic.h"
 #include "modified_cam_clay.h"
 #include "mohr_coulomb.h"
@@ -21,6 +22,14 @@ static Register<mpm::Material<2>, mpm::LinearElastic<2>, unsigned, const Json&>
 // LinearElastic 3D
 static Register<mpm::Material<3>, mpm::LinearElastic<3>, unsigned, const Json&>
     linear_elastic_3d("LinearElastic3D");
+
+// Hyperbolic 2D
+static Register<mpm::Material<2>, mpm::Hyperbolic<2>, unsigned, const Json&>
+    hyperbolic_2d("Hyperbolic2D");
+
+// Hyperbolic 3D
+static Register<mpm::Material<3>, mpm::Hyperbolic<3>, unsigned, const Json&>
+    hyperbolic_3d("Hyperbolic3D");
 
 // ModifiedCamClay 2D
 static Register<mpm::Material<2>, mpm::ModifiedCamClay<2>, unsigned,
