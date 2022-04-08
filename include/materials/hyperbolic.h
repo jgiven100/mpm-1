@@ -59,8 +59,8 @@ class Hyperbolic : public InfinitesimalElastoPlastic<Tdim> {
   //! \param[in] particle Constant point to particle base
   //! \param[in] state_vars History-dependent state variables
   //! \retval updated_stress Updated value of stress
-  Vector6d compute_stress(const Vector6d& stress, const Vector6d& dstrain,
-                          const ParticleBase<Tdim>* ptr,
+  Vector6d compute_stress(const Vector6d& stress,
+                          const Vector6d& dstrain, const ParticleBase<Tdim>* ptr,
                           mpm::dense_map* state_vars) override;
 
   //! Compute consistent tangent matrix
@@ -113,6 +113,35 @@ class Hyperbolic : public InfinitesimalElastoPlastic<Tdim> {
   double vp_{std::numeric_limits<double>::max()};
   //! Shear Wave Velocity
   double vs_{std::numeric_limits<double>::max()};
+  //! Beta arameter
+  double beta_{std::numeric_limits<double>::max()};
+  //! s parameter
+  double s_{std::numeric_limits<double>::max()};
+  //! Reference strain
+  double reference_strain_{std::numeric_limits<double>::max()};
+  //! p1 parameter
+  double p1_{std::numeric_limits<double>::max()};
+  //! p2 parameter
+  double p2_{std::numeric_limits<double>::max()};
+  //! p3 paramaeter
+  double p3_{std::numeric_limits<double>::max()};
+  //! Calculated Stress
+  Eigen::Matrix<double, 6, 1> calc_stress_;
+  //! Reveral Strain
+  Eigen::Matrix<double, 6, 1> reversal_strain_;
+  //! Reversal Stress
+  Eigen::Matrix<double, 6, 1> reversal_stress_;
+  //! Maximum Stress
+  Eigen::Matrix<double, 6, 1> maximum_strain_;
+  //! Initial Strain Direction
+  Eigen::Matrix<double, 6, 1> init_dir_;
+  //! New Strain Direction
+  Eigen::Matrix<double, 6, 1> new_dir_;
+  //! Secant modulus
+  double secant_modulus_{std::numeric_limits<double>::max()};
+  //! Initial loading
+  bool init_loading_{true};
+
 };  // Hyperbolic class
 }  // namespace mpm
 
