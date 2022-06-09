@@ -3,7 +3,6 @@
 
 #include <cmath>
 #include <iomanip>
-#include <iostream>  // TODO : remove me!!
 
 #include "Eigen/Dense"
 
@@ -74,9 +73,20 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   using Material<Tdim>::console_;
 
  private:
+  //! Compute Cg coefficient (plastic shear modulus)
+  //! \param[in] state_vars History-dependent state variables
+  //! \retval Cg coefficient
+  double compute_Cg(mpm::dense_map* state_vars);
+
+  //! Compute Ci coefficient (plastic bulk modulus)
+  //! \param[in] state_vars History-dependent state variables
+  //! \retval Ci coefficient
+  double compute_Ci(mpm::dense_map* state_vars);
+
   //! Compute elastic tensor
   //! \param[in] stress Stress
   //! \param[in] state_vars History-dependent state variables
+  //! \retval De elastic stiffness tensor
   Eigen::Matrix<double, 6, 6> compute_elastic_tensor(
       const Vector6d& stress, mpm::dense_map* state_vars);
 
@@ -87,20 +97,74 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! \param[in] state_vars History-dependent state variables
   //! \param[in] hardening Boolean to consider hardening, default=true. If
   //! perfect-plastic tensor is needed pass false
-  //! \retval dmatrix Constitutive relations mattrix
+  //! \retval Dep elasto plastic stiffness tensor
   Matrix6x6 compute_elasto_plastic_tensor(const Vector6d& stress,
                                           const Vector6d& dstrain,
                                           const ParticleBase<Tdim>* ptr,
                                           mpm::dense_map* state_vars,
                                           bool hardening = true) override;
 
-  //! Inline ternary function to check negative or zero numbers
-  inline double check_low(double val) {
-    return (val > 1.0e-15 ? val : 1.0e-15);
-  }
+  //! Compute first loop (stress-based) functions
+  //! \param[in] stress Stress
+  //! \param[in] state_vars History-dependent state variables
+  void compute_first_loop(const Vector6d& stress, mpm::dense_map* state_vars);
 
-  //! Inline ternary function to check number not greater than one
-  inline double check_one(double val) { return (val < 1.0 ? val : 1.0); }
+  //! Compute plastic shear modulus coefficient Hr
+  //! \param[in] mean_p Current mean stress
+  //! \param[in] state_vars History-dependent state variables
+  //! \retval Hr Plastic shear modulus coefficient
+  double compute_G(const double& mean_p, mpm::dense_map* state_vars);
+
+  //! Compute plastic shear modulus coefficient Hr
+  //! \param[in] mean_p Current mean stress
+  //! \param[in] state_vars History-dependent state variables
+  //! \retval Hr Plastic shear modulus coefficient
+  double compute_Hr(const double& mean_p, mpm::dense_map* state_vars);
+
+  //! Compute m power
+  //! \param[in] state_vars History-dependent state variables
+  //! \retval m Power used in plastic bulk and shear modulus
+  double compute_m(mpm::dense_map* state_vars);
+
+  //! Compute unit normal to yield surface (incremental strain)
+  //! \param[in] dev_r Deviatoric stress ratio vector
+  //! \param[in] dstrain Strain increment vector
+  //! \param[in] state_vars History-dependent state variables
+  //! \retval n Unit normal to yield surface (incremental strain)
+  Vector6d compute_n(const Vector6d& dev_r, const Vector6d& dstrain,
+                     mpm::dense_map* state_vars);
+
+  //! Compute unit normal to yield surface (incremental stress)
+  //! \param[in] dev_r Deviatoric stress ratio vector
+  //! \param[in] Rd Dilation surface
+  //! \param[in] state_vars History-dependent state variables
+  //! \retval n_bar Unit normal to yield surface (incremental stress)
+  Vector6d compute_n_bar(const Vector6d& dev_r, const double& Rd,
+                         mpm::dense_map* state_vars);
+
+  //! Compute dilation surface
+  //! \param[in] mean_p Current mean stress
+  //! \param[in] state_vars History-dependent state variables
+  //! \retval Rd Deviatoric stress invariant defining the dilation surface
+  double compute_Rd(const double& mean_p, mpm::dense_map* state_vars);
+
+  //! Compute relative density dependent terms
+  //! \param[in] state_vars History-dependent state variables
+  void compute_relative_density_terms(mpm::dense_map* state_vars);
+
+  //! Compute plastic bulk modulus coefficient w
+  //! \param[in] mean_p Current mean stress
+  //! \param[in] m Plastic modulus power
+  //! \param[in] Rd Stress invariant for current dilation surface
+  //! \param[in] state_vars History-dependent state variables
+  //! \retval w Plastic bulk modulus coefficient
+  double compute_w(const double& mean_p, const double& m, const double& Rd,
+                   mpm::dense_map* state_vars);
+
+  //!  Convert strain from engineering to true shear strain
+  //! \param[in] dstrain Incremental strain
+  //! \retval dstrain_t incremental strain with true shear strain values
+  Vector6d convert_strain(const Vector6d& dstrain);
 
   //! Compute Frobenius norm
   //! \param[in] vec_A vector form of 2D matrix (i.e., Voigt notation)
@@ -113,91 +177,76 @@ class BoundSurfPlasticity : public InfinitesimalElastoPlastic<Tdim> {
   //! \retval Frobenius innner product of 2 matrices
   double frobenius_prod(const Vector6d& vec_A, const Vector6d& vec_B);
 
+  //! Set loading bool
+  //! \param[in] dev_dstrain Deviatoric strain (engineering shear) increment
+  //! \param[in] n_bar Normal to yield surface (incremental stress dependent)
+  //! \retval loading Bool for loading status
+  bool set_loading(const Vector6d& dev_dstrain, const Vector6d& n_bar);
+
+  //! Inline ternary function to check negative or zero numbers
+  inline double check_low(double val) {
+    return (val > 1.0e-15 ? val : 1.0e-15);
+  }
+
   //! Inline function to scale
   inline double scale(double factor, double Dr) {
     return (2. - factor + 2. * (factor - 1.) * Dr);
   }
 
+  //! Inline function to get trace of 3x3 tensor (Voigt notation)
+  inline double trace(const Vector6d& vec) {
+    return (vec(0) + vec(1) + vec(2));
+  }
+
   //! Model parameter: wm function a power
   double a_pow_{std::numeric_limits<double>::max()};
-  //! Previous stress reversal point
-  Eigen::Matrix<double, 6, 1> alpha_{Vector6d::Zero()};
   //! Model parameter: wm function b power
   double b_pow_{std::numeric_limits<double>::max()};
   //! Input parameter: wr function d power
   double d0_{std::numeric_limits<double>::max()};
-  //! Model parameter: wr function d power
-  double d_{std::numeric_limits<double>::max()};
   //! Density
   double density_{std::numeric_limits<double>::max()};
-  //! Cumulative plastic deviatoric strain
-  double dep_{std::numeric_limits<double>::max()};
+  //! Realtive density dependent variables
+  Eigen::Matrix<double, 10, 1> density_vars_{
+      Eigen::Matrix<double, 10, 1>::Zero()};
+  //! Mutable strain increment
+  Eigen::Matrix<double, 6, 1> dstrain_last_{Vector6d::Zero()};
   //! CSL void ratio intercept
   double e0_{std::numeric_limits<double>::max()};
-  //! Critical void ratio
-  double ec_{std::numeric_limits<double>::max()};
   //! Input parameter: Ci function eta coefficient
   double eta0_{std::numeric_limits<double>::max()};
-  //! Model parameter: Ci function eta coefficient
-  double eta_{std::numeric_limits<double>::max()};
-  //! Initialization bool
-  bool first_loop_{true};
+  // Maximum void ratio
+  double e_max_{std::numeric_limits<double>::max()};
+  // Minimum void ratio
+  double e_min_{std::numeric_limits<double>::max()};
   //! Ratio fp = Rp / Rf
   double fp_{std::numeric_limits<double>::max()};
   //! Friction angle
   double friction_{std::numeric_limits<double>::max()};
-  //! Shear modulus model parameter
+  //! Shear modulus parameter
   double G0_{std::numeric_limits<double>::max()};
   //! Input parameter: Ci and Cg functions gm coefficient
   double gm0_{std::numeric_limits<double>::max()};
-  //! Model parameter: Ci and Cg functions gm coefficient
-  double gm_{std::numeric_limits<double>::max()};
   //! Input parameter: Hr function hr coefficient
   double hr0_{std::numeric_limits<double>::max()};
-  //! Model parameter: Hr function hr coefficient
-  double hr_{std::numeric_limits<double>::max()};
-  //! Model parameter: m function ka power
-  double ka_{std::numeric_limits<double>::max()};
-  //! Model parameter: Ci and Cg function ke power
-  double ke_{std::numeric_limits<double>::max()};
   //! Input parameter: wm function kr coefficient
   double kr0_{std::numeric_limits<double>::max()};
-  //! Model parameter: wm function kr coefficient
-  double kr_{std::numeric_limits<double>::max()};
-  //! Model parameter: wr function ks power
-  double ks_{std::numeric_limits<double>::max()};
   //! Critial state slope
   double lambda_{std::numeric_limits<double>::max()};
   //! Reference (atmospheric) pressure
   double p_atm_{std::numeric_limits<double>::max()};
-  //! Max mean pressure
+  //! Maximum allowable mean pressure
   double p_max_{std::numeric_limits<double>::max()};
   //! Minimum allowable mean pressure
   double p_min_{std::numeric_limits<double>::max()};
-  //! Critical state mean pressure
-  double pc_{std::numeric_limits<double>::max()};
   //! Poisson ratio
   double poisson_{std::numeric_limits<double>::max()};
-  //! Maximum allowable R
-  double R_max_{std::numeric_limits<double>::max()};
-  //! Dilation surface
-  double Rd_{std::numeric_limits<double>::max()};
   //! Input parameter: failure surface
   double Rf0_{std::numeric_limits<double>::max()};
-  //! Failure surface
-  double Rf_{std::numeric_limits<double>::max()};
-  //! Maximum pre-stress surface
-  double Rm_{std::numeric_limits<double>::max()};
-  //! Relative density (decimal)
-  double relative_density_{std::numeric_limits<double>::max()};
-  //! Distance from reversal point to current state
-  double rho_{std::numeric_limits<double>::max()};
-  //! Distance from reversal point to yield surface
-  double rho_bar_{std::numeric_limits<double>::max()};
-  //! Distance from reversal point to dilation surface
-  double rho_d_{std::numeric_limits<double>::max()};
   //! Default tolerance
   double tolerance_{std::numeric_limits<double>::epsilon()};
+  //! Initial void ratio (crticial void ratio if undrained)
+  double void_ratio_initial_{std::numeric_limits<double>::max()};
   //! Failure state map
   std::map<int, mpm::boundsurfplasticity::FailureState> yield_type_ = {
       {0, mpm::boundsurfplasticity::FailureState::Elastic},

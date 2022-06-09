@@ -15,7 +15,8 @@
 #include "particle.h"
 
 //! Check Bounding Surface Plasticity class in 3D
-TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlasticity][3D]") {
+TEST_CASE("Bound Surface Plasticity is checked in 3D",
+          "[material][BoundSurfPlasticity][3D]") {
   // Tolerance
   const double Tolerance = 1.E-7;
 
@@ -35,8 +36,9 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
   jmaterial["friction"] = 28.;
   jmaterial["G0"] = 100.;
   jmaterial["poisson_ratio"] = 0.33;
-  jmaterial["critical_void_ratio"] = 0.72;
-  jmaterial["relative_density"] = 0.43;
+  jmaterial["initial_void_ratio"] = 0.72256;
+  jmaterial["maximum_void_ratio"] = 0.855;
+  jmaterial["minimum_void_ratio"] = 0.547;
   jmaterial["hr0"] = 0.25;
   jmaterial["kr0"] = 0.2;
   jmaterial["d0"] = 2.5;
@@ -58,7 +60,7 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
     stress(1) = -82001;
     stress(2) = -61500;
 
-    // Initialise dstrain 
+    // Initialise dstrain
     mpm::Material<Dim>::Vector6d dstrain;
     dstrain.setZero();
 
@@ -81,7 +83,7 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
     for (unsigned i = 0; i < 60000 + 1; ++i) {
 
       // Check stress ratio
-      if (std::fabs(stress(3)/82001) > 0.2 ) {
+      if (std::fabs(stress(3) / 82001) > 0.2) {
         if (count > 10) {
           sign *= -1.;
           count = 0;
@@ -103,4 +105,4 @@ TEST_CASE("Bound Surface Plasticity is checked in 3D", "[material][BoundSurfPlas
     }
     myfile.close();
   }
-} 
+}

@@ -497,6 +497,35 @@ Eigen::Matrix<double, 6, 6>
         const ParticleBase<Tdim>* ptr, mpm::dense_map* state_vars,
         bool hardening) {
 
+  // ADD ME FOR SINGLE POINT TXC SIMULATIONS
+  // const double pdstrain = (*state_vars).at("pdstrain");
+  // // Update MC parameters using a linear softening rule
+  // if (softening_ && pdstrain > pdstrain_peak_) {
+  //   if (pdstrain < pdstrain_residual_) {
+  //     (*state_vars).at("phi") =
+  //         phi_residual_ +
+  //         ((phi_peak_ - phi_residual_) * (pdstrain - pdstrain_residual_) /
+  //          (pdstrain_peak_ - pdstrain_residual_));
+  //     (*state_vars).at("psi") =
+  //         psi_residual_ +
+  //         ((psi_peak_ - psi_residual_) * (pdstrain - pdstrain_residual_) /
+  //          (pdstrain_peak_ - pdstrain_residual_));
+  //     (*state_vars).at("cohesion") =
+  //         cohesion_residual_ + ((cohesion_peak_ - cohesion_residual_) *
+  //                               (pdstrain - pdstrain_residual_) /
+  //                               (pdstrain_peak_ - pdstrain_residual_));
+  //   } else {
+  //     (*state_vars).at("phi") = phi_residual_;
+  //     (*state_vars).at("psi") = psi_residual_;
+  //     (*state_vars).at("cohesion") = cohesion_residual_;
+  //   }
+  //   // Modify tension cutoff acoording to softening law
+  //   const double apex =
+  //       (*state_vars).at("cohesion") / std::tan((*state_vars).at("phi"));
+  //   if ((*state_vars).at("tension_cutoff") > apex)
+  //     (*state_vars).at("tension_cutoff") = check_low(apex);
+  // }
+
   mpm::mohrcoulomb::FailureState yield_type =
       yield_type_.at(int((*state_vars).at("yield_state")));
   // Return the updated stress in elastic state

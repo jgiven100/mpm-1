@@ -184,12 +184,10 @@ Eigen::Matrix<double, 6, 6> mpm::NorSand<Tdim>::compute_elastic_tensor(
   // compute elastic stiffness matrix
   // clang-format off
   Matrix6x6 de = Matrix6x6::Zero();
-  de(0,0)=a1;    de(0,1)=a2;    de(0,2)=a2;    de(0,3)=0;    de(0,4)=0;    de(0,5)=0;
-  de(1,0)=a2;    de(1,1)=a1;    de(1,2)=a2;    de(1,3)=0;    de(1,4)=0;    de(1,5)=0;
-  de(2,0)=a2;    de(2,1)=a2;    de(2,2)=a1;    de(2,3)=0;    de(2,4)=0;    de(2,5)=0;
-  de(3,0)= 0;    de(3,1)= 0;    de(3,2)= 0;    de(3,3)=G;    de(3,4)=0;    de(3,5)=0;
-  de(4,0)= 0;    de(4,1)= 0;    de(4,2)= 0;    de(4,3)=0;    de(4,4)=G;    de(4,5)=0;
-  de(5,0)= 0;    de(5,1)= 0;    de(5,2)= 0;    de(5,3)=0;    de(5,4)=0;    de(5,5)=G;
+  de(0,0)=a1;    de(0,1)=a2;    de(0,2)=a2;
+  de(1,0)=a2;    de(1,1)=a1;    de(1,2)=a2;
+  de(2,0)=a2;    de(2,1)=a2;    de(2,2)=a1;
+  de(3,3)=G;     de(4,4)=G;     de(5,5)=G;
   // clang-format on
 
   return de;
@@ -361,13 +359,38 @@ void mpm::NorSand<Tdim>::compute_image_parameters(mpm::dense_map* state_vars) {
   const double psi_image = void_ratio - e_image;
   (*state_vars).at("psi_image") = psi_image;
 
+  // Critical state coefficient reduction factor
+  double factor = ((chi_image_ * N_ * std::fabs(psi_image)) / Mtc_);
+
+  // Critical state coefficient reduction factor cap; motivated via maximum
+  // reasonable (e_max - e_min) being approximately 0.5
+  if (factor > 0.5) factor = 0.5;
+  // if (factor > 0.75) factor = 0.75;
+
+  // Reduce critical state coefficient reduction factor to zero with as
+  // pdstrain reaches 100%; this enforces that soil reaches critical state at
+  // very large plastic strains
+  const double pdstrain = (*state_vars).at("pdstrain");
+  const double pd_start = 0.50;
+  const double pd_end = 1.00;
+
+  if (pdstrain < pd_start) {
+    factor *= 1.;
+  } else if (pdstrain < pd_end) {
+    factor *= (1. - ((pdstrain - pd_start) / (pd_end - pd_start)));
+  } else {
+    factor = 0.;
+  }
+
   // Compute critical state coefficient image
-  (*state_vars).at("M_image") =
-      M_theta * (1. - ((chi_image_ * N_ * std::fabs(psi_image)) / Mtc_));
+  // (*state_vars).at("M_image") =
+  // M_theta * (1. - ((chi_image_ * N_ * std::fabs(psi_image)) / Mtc_));
+  (*state_vars).at("M_image") = M_theta * (1. - factor);
 
   // Compute critical state coefficient image triaxial compression
-  (*state_vars).at("M_image_tc") =
-      Mtc_ * (1. - ((chi_image_ * N_ * std::fabs(psi_image)) / Mtc_));
+  // (*state_vars).at("M_image_tc") =
+  //     Mtc_ * (1. - ((chi_image_ * N_ * std::fabs(psi_image)) / Mtc_));
+  (*state_vars).at("M_image_tc") = Mtc_ * (1. - factor);
 }
 
 //! Compute state parameters
@@ -399,7 +422,9 @@ void mpm::NorSand<Tdim>::compute_state_variables(
                  -1) *
             (mean_p + p_cohesion) -
         (p_cohesion + p_dilation);
-    (*state_vars).at("p_image") = p_image;
+    const double p_image_min = (p_image < 1.0) ? 1.0 : p_image;
+    (*state_vars).at("p_image") = p_image_min;
+    // (*state_vars).at("p_image") = p_image;
 
     // Compute and update void ratio image
     double e_image =
@@ -506,6 +531,9 @@ Eigen::Matrix<double, 6, 1> mpm::NorSand<Tdim>::compute_stress(
   // Set elastic tensor
   const Matrix6x6 de = this->compute_elastic_tensor(stress, state_vars);
 
+  // dstrain_neg(0) = -1. * de(0, 2) / (de(0, 0) + de(0, 1)) * dstrain_neg(2);
+  // dstrain_neg(1) = -1. * de(1, 2) / (de(1, 0) + de(1, 1)) * dstrain_neg(2);
+
   // Trial stress - elastic
   Vector6d trial_stress = stress_neg + (de * dstrain_neg);
 
@@ -534,6 +562,9 @@ Eigen::Matrix<double, 6, 1> mpm::NorSand<Tdim>::compute_stress(
   // Compute D matrix used in stress update
   const Matrix6x6 dep =
       this->compute_elasto_plastic_tensor(stress, dstrain, ptr, state_vars);
+
+  // dstrain_neg(0) = -1. * dep(0,2) / (dep(0,0) + dep(0,1)) * dstrain_neg(2);
+  // dstrain_neg(1) = -1. * dep(1,2) / (dep(1,0) + dep(1,1)) * dstrain_neg(2);
 
   // Update stress
   Vector6d updated_stress = stress_neg + dep * dstrain_neg;

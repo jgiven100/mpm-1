@@ -210,7 +210,10 @@ target_link_libraries(mpm git)
 if(MPM_BUILD_TESTING)
   SET(test_src
     ${mpm_SOURCE_DIR}/tests/test_main.cc
-    ${mpm_SOURCE_DIR}/tests/materials/bound_surf_plasticity_tx.cc
+    ${mpm_SOURCE_DIR}/tests/materials/bound_surf_plasticity_dss.cc
+    ${mpm_SOURCE_DIR}/tests/materials/tx_mohr_coulomb.cc
+    ${mpm_SOURCE_DIR}/tests/materials/tx_norsand.cc
+    ${mpm_SOURCE_DIR}/tests/materials/tx_bound_surf_plasticity.cc
   )
   add_executable(mpmtest ${mpm_src} ${test_src})
   add_test(NAME mpmtest COMMAND $<TARGET_FILE:mpmtest>)
