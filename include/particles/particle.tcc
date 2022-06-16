@@ -686,20 +686,12 @@ inline Eigen::Matrix<double, 6, 1> mpm::Particle<3>::compute_strain_rate(
 template <unsigned Tdim>
 void mpm::Particle<Tdim>::compute_strain(double dt) noexcept {
   // Assign strain rate
-  strain_rate_ = this->compute_strain_rate(dn_dx_, mpm::ParticlePhase::Solid);
+  Eigen::Matrix<double, 6, 1> strain_rate = Eigen::Matrix<double, 6, 1>::Zero();
+  strain_rate[3] = 1;
   // Update dstrain
-  dstrain_ = strain_rate_ * dt;
+  dstrain_ = strain_rate * dt;
   // Update strain
   strain_.noalias() += dstrain_;
-
-  // Compute at centroid
-  // Strain rate for reduced integration
-  const Eigen::Matrix<double, 6, 1> strain_rate_centroid =
-      this->compute_strain_rate(dn_dx_centroid_, mpm::ParticlePhase::Solid);
-
-  // Assign volumetric strain at centroid
-  dvolumetric_strain_ = dt * strain_rate_centroid.head(Tdim).sum();
-  volumetric_strain_centroid_ += dvolumetric_strain_;
 }
 
 // Compute stress

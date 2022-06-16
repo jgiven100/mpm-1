@@ -59,8 +59,8 @@ class Hyperbolic : public InfinitesimalElastoPlastic<Tdim> {
   //! \param[in] particle Constant point to particle base
   //! \param[in] state_vars History-dependent state variables
   //! \retval updated_stress Updated value of stress
-  Vector6d compute_stress(const Vector6d& stress,
-                          const Vector6d& dstrain, const ParticleBase<Tdim>* ptr,
+  Vector6d compute_stress(const Vector6d& stress, const Vector6d& dstrain,
+                          const ParticleBase<Tdim>* ptr,
                           mpm::dense_map* state_vars) override;
 
   //! Compute consistent tangent matrix
@@ -85,7 +85,7 @@ class Hyperbolic : public InfinitesimalElastoPlastic<Tdim> {
 
  private:
   //! Compute elastic tensor
-  Eigen::Matrix<double, 6, 6> compute_elastic_tensor();
+  Eigen::Matrix<double, 6, 6> compute_tensor(const Vector6d& strain);
 
   //! Compute constitutive relations matrix for elasto-plastic material
   //! \param[in] stress Stress

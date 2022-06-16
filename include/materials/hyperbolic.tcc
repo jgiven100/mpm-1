@@ -10,15 +10,14 @@ mpm::Hyperbolic<Tdim>::Hyperbolic(unsigned id, const Json& material_properties)
         material_properties.at("poisson_ratio").template get<double>();
 
     // Material Properties for viscoelastic damping
-    beta_ = material_properties.at("beta").template get <double>();
-    s_ = material_properties.at("s").template get <double>();
-    reference_strain_ = material_properties.at("reference_stress").template get <double>();
-    p1_ = material_properties.at("p1").template get <double>();
-    p2_ = material_properties.at("p2").template get <double>();
-    p3_ = material_properties.at("p3").template get <double>();
+    beta_ = material_properties.at("beta").template get<double>();
+    s_ = material_properties.at("s").template get<double>();
+    reference_strain_ =
+        material_properties.at("reference_strain").template get<double>();
+    p1_ = material_properties.at("p1").template get<double>();
+    p2_ = material_properties.at("p2").template get<double>();
+    p3_ = material_properties.at("p3").template get<double>();
 
-    // Set elastic tensor
-    this->compute_elastic_tensor();
   } catch (Json::exception& except) {
     console_->error("Material parameter not set: {} {}\n", except.what(),
                     except.id);
@@ -43,22 +42,57 @@ std::vector<std::string> mpm::Hyperbolic<Tdim>::state_variables() const {
 
 //! Return elastic tensor
 template <unsigned Tdim>
-Eigen::Matrix<double, 6, 6> mpm::Hyperbolic<Tdim>::compute_elastic_tensor() {
+Eigen::Matrix<double, 6, 6> mpm::Hyperbolic<Tdim>::compute_tensor(
+    const Vector6d& strain) {
   // Shear modulus
   const double G = youngs_modulus_ / (2.0 * (1. + poisson_ratio_));
-
+  // Calculate bulk modulus
+  bulk_modulus_ = youngs_modulus_ / (3.0 * (1. - 2. * poisson_ratio_));
   const double a1 = bulk_modulus_ + (4.0 / 3.0) * G;
   const double a2 = bulk_modulus_ - (2.0 / 3.0) * G;
 
+  Vector6d G_mod_ = Vector6d::Zero();
+  if (init_loading_) {
+    G_mod_ =
+        (G * (1 + beta_ * pow(strain.array().abs() / reference_strain_, s_))
+                 .inverse())
+            .matrix();
+  } else {
+    // Strain Vectors and subtracting reversal strain
+    Vector6d strain_dif = (strain - reversal_strain_).cwiseAbs();
+
+    // Calculating Reduction Factor
+    double reduction_factor = (p1_ - p2_ * pow(1. - secant_modulus_ / G, p3_));
+
+    // Calculating Second Term
+    Vector6d term2 =
+        (G *
+         (1. + beta_ * pow(strain_dif.array() / (2 * reference_strain_), s_))
+             .inverse())
+            .matrix();
+
+    // Calculating Third Term
+    Vector6d term3 =
+        (G *
+         (1. +
+          beta_ * pow((maximum_strain_.array() - reference_strain_).abs(), s_))
+             .inverse())
+            .matrix();
+
+    G_mod_ = reduction_factor * (term2 - term3) + term3;
+  }
+
+  std::cout << G_mod_(0) << '\t' << G_mod_(1) << '\t' << G_mod_(2) << '\t'
+            << G_mod_(3) << '\t' << G_mod_(4) << '\t' << G_mod_(5) << '\n';
   Matrix6x6 de = Matrix6x6::Zero();
   // clang-format off
   // compute elasticityTensor
-  de(0,0)=a1;    de(0,1)=a2;    de(0,2)=a2;    de(0,3)=0;    de(0,4)=0;    de(0,5)=0;
-  de(1,0)=a2;    de(1,1)=a1;    de(1,2)=a2;    de(1,3)=0;    de(1,4)=0;    de(1,5)=0;
-  de(2,0)=a2;    de(2,1)=a2;    de(2,2)=a1;    de(2,3)=0;    de(2,4)=0;    de(2,5)=0;
-  de(3,0)= 0;    de(3,1)= 0;    de(3,2)= 0;    de(3,3)=G;    de(3,4)=0;    de(3,5)=0;
-  de(4,0)= 0;    de(4,1)= 0;    de(4,2)= 0;    de(4,3)=0;    de(4,4)=G;    de(4,5)=0;
-  de(5,0)= 0;    de(5,1)= 0;    de(5,2)= 0;    de(5,3)=0;    de(5,4)=0;    de(5,5)=G;
+  de(0,0)=a1;    de(0,1)=a2;    de(0,2)=a2;
+  de(1,0)=a2;    de(1,1)=a1;    de(1,2)=a2;
+  de(2,0)=a2;    de(2,1)=a2;    de(2,2)=a1;
+  de(3,3)=G_mod_(3);
+  de(4,4)=G_mod_(4);
+  de(5,5)=G_mod_(5);
   // clang-format on
   return de;
 }
@@ -80,51 +114,64 @@ template <unsigned Tdim>
 Eigen::Matrix<double, 6, 1> mpm::Hyperbolic<Tdim>::compute_stress(
     const Vector6d& stress, const Vector6d& dstrain,
     const ParticleBase<Tdim>* ptr, mpm::dense_map* state_vars) {
-    auto strain = ptr->strain();
+  auto strain = ptr->strain();
 
-    if ((strain.cwiseEqual(0)).all()) {
-        // Determine directionality of initial strain
-        Vector6d init_dir_ = dstrain.cwiseSign();
-        bool init_loading = true;
-    } else {
-        Vector6d new_dir_ = dstrain.cwiseSign();
-        if ((new_dir_.array() != init_dir_.array()).any()) {
-            bool init_loading_ = false;
-            Vector6d reversal_strain_ = strain;
-            Vector6d reversal_stress_ = stress;
-            if ((maximum_strain_.cwiseEqual(0)).all()) {
-                Vector6d maximum_strain_ = strain;
-                double secant_modulus_ = stress(0)/stress(0);
-            } else {
-                if ((strain.array().abs() > maximum_strain_.array().abs()).any()) {
-                    Vector6d maximum_strain_ = strain;
-                    double secant_modulus_ = stress(0)/stress(0);
-                }
-            }
+  if (((strain.cwiseEqual(0)).all()) or (init_dir_.cwiseEqual(0).all())) {
+    // Determine directionality of initial strain
+    init_dir_ = dstrain.cwiseSign();
+    init_loading_ = true;
+  } else {
+    new_dir_ = dstrain.cwiseSign();
+    if (new_dir_(3) != init_dir_(3)) {
+      init_loading_ = false;
+      reversal_strain_ = strain;
+      reversal_stress_ = stress;
+      if ((maximum_strain_.cwiseEqual(0)).all()) {
+        maximum_strain_ = strain;
+        secant_modulus_ = stress(3) / strain(3);
+      } else {
+        if ((abs(strain(3)) > abs(maximum_strain_(3)))) {
+          maximum_strain_ = strain;
+          secant_modulus_ = stress(3) / strain(3);
         }
+      }
     }
+  }
+  Matrix6x6 de_ = compute_tensor(strain);
 
-    double shear_modulus = youngs_modulus_ / (2.0 * (1. + poisson_ratio_));
-    if (init_loading_) {
-        Vector6d calc_stress_ = (shear_modulus*strain.array()*(1+beta_*pow(strain.array() / reference_strain_,s_).inverse())).matrix();
-    } else {
-        // Strain Vectors and subtracting reversal strain
-        Vector6d strain_dif = strain - reversal_strain_;
+  const Vector6d dstress = de_ * dstrain;
+  Vector6d b_mod = Vector6d::Zero();
+  if (!init_loading_) {
+    double G = youngs_modulus_ / (2.0 * (1. + poisson_ratio_));
 
-        // Calculating Reduction Factor
-        double reduction_factor = (p1_-p2_*pow(1.-secant_modulus_/shear_modulus,p3_));
+    // Strain Vectors and subtracting reversal strain
+    Vector6d strain_dif = (strain - reversal_strain_);
 
-        // Calculating Second Term
-        Vector6d term2 = (shear_modulus*strain_dif.array()*(1.+beta_*pow(reference_strain_*strain_dif.array()/2,s_)).inverse()).matrix();
+    // Calculating Reduction Factor
+    double reduction_factor = (p1_ - p2_ * pow(1. - secant_modulus_ / G, p3_));
 
-        // Calculating Third Term
-        Vector6d term3 = (shear_modulus*strain_dif.array()*(1.+beta_*pow(maximum_strain_.array()-reference_strain_,s_)).inverse()).matrix();
+    // Calculating Second Term
+    Vector6d term2 =
+        (G * strain_dif.array() *
+         (1. + beta_ * pow((strain_dif.array() + dstrain.array()).abs() /
+                               (2 * reference_strain_),
+                           s_))
+             .inverse())
+            .matrix();
 
-        Vector6d calc_stress_ = reduction_factor*(term2+term3)+term3+reversal_stress_;
-    }
-    return calc_stress_;
+    // Calculating Third Term
+    Vector6d term3 =
+        (G * strain_dif.array() *
+         (1. +
+          beta_ * pow((maximum_strain_.array() - reference_strain_).abs(), s_))
+             .inverse())
+            .matrix();
+
+    // Calculate intercept value
+    Vector6d b_mod = reduction_factor * (term2 - term3);
+  }
+  return (stress + dstress + b_mod);
 }
-
 
 //! Compute consistent tangent matrix
 template <unsigned Tdim>
@@ -133,6 +180,6 @@ Eigen::Matrix<double, 6, 6>
         const Vector6d& stress, const Vector6d& prev_stress,
         const Vector6d& dstrain, const ParticleBase<Tdim>* ptr,
         mpm::dense_map* state_vars) {
-  const Matrix6x6 de = this->compute_elastic_tensor();
+  const Matrix6x6 de = this->compute_tensor(dstrain);
   return de;
 }
