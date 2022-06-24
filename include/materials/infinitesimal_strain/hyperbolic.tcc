@@ -172,14 +172,3 @@ Eigen::Matrix<double, 6, 1> mpm::Hyperbolic<Tdim>::compute_stress(
   }
   return (stress + dstress + b_mod);
 }
-
-//! Compute consistent tangent matrix
-template <unsigned Tdim>
-Eigen::Matrix<double, 6, 6>
-    mpm::Hyperbolic<Tdim>::compute_consistent_tangent_matrix(
-        const Vector6d& stress, const Vector6d& prev_stress,
-        const Vector6d& dstrain, const ParticleBase<Tdim>* ptr,
-        mpm::dense_map* state_vars) {
-  const Matrix6x6 de = this->compute_tensor(dstrain);
-  return de;
-}
