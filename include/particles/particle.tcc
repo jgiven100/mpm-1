@@ -732,10 +732,9 @@ inline Eigen::Matrix<double, 6, 1> mpm::Particle<3>::compute_strain_rate(
 template <unsigned Tdim>
 void mpm::Particle<Tdim>::compute_strain(double dt) noexcept {
   // Assign strain rate
-  Eigen::Matrix<double, 6, 1> strain_rate = Eigen::Matrix<double, 6, 1>::Zero();
-  strain_rate[3] = 1;
+  strain_rate_ = this->compute_strain_rate(dn_dx_, mpm::ParticlePhase::Solid);
   // Update dstrain
-  dstrain_ = strain_rate * dt;
+  dstrain_ = strain_rate_ * dt;
   // Update strain
   strain_.noalias() += dstrain_;
 
