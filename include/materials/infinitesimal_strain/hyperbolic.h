@@ -73,7 +73,7 @@ class Hyperbolic : public InfinitesimalElastoPlastic<Tdim> {
 
  private:
   //! Compute elastic tensor
-  Eigen::Matrix<double, 6, 6> compute_tensor(const Vector6d& strain);
+  Eigen::Matrix<double, 6, 6> compute_elastic_tensor();
 
   //! Compute constitutive relations matrix for elasto-plastic material
   //! \param[in] stress Stress
@@ -95,6 +95,8 @@ class Hyperbolic : public InfinitesimalElastoPlastic<Tdim> {
   double youngs_modulus_{std::numeric_limits<double>::max()};
   //! Poisson ratio
   double poisson_ratio_{std::numeric_limits<double>::max()};
+  //! Shear modulus
+  double shear_modulus_{std::numeric_limits<double>::max()};
   //! Bulk modulus
   double bulk_modulus_{std::numeric_limits<double>::max()};
   //! Compressional Wave Velocity
@@ -106,27 +108,17 @@ class Hyperbolic : public InfinitesimalElastoPlastic<Tdim> {
   //! s parameter
   double s_{std::numeric_limits<double>::max()};
   //! Reference strain
-  double reference_strain_{std::numeric_limits<double>::max()};
+  double strain_ref_{std::numeric_limits<double>::max()};
   //! p1 parameter
   double p1_{std::numeric_limits<double>::max()};
   //! p2 parameter
   double p2_{std::numeric_limits<double>::max()};
   //! p3 paramaeter
   double p3_{std::numeric_limits<double>::max()};
-  //! Calculated Stress
-  Eigen::Matrix<double, 6, 1> calc_stress_;
-  //! Reveral Strain
-  Eigen::Matrix<double, 6, 1> reversal_strain_;
-  //! Reversal Stress
-  Eigen::Matrix<double, 6, 1> reversal_stress_;
-  //! Maximum Stress
-  Eigen::Matrix<double, 6, 1> maximum_strain_;
-  //! Initial Strain Direction
-  Eigen::Matrix<double, 6, 1> init_dir_;
-  //! New Strain Direction
-  Eigen::Matrix<double, 6, 1> new_dir_;
-  //! Secant modulus
-  double secant_modulus_{std::numeric_limits<double>::max()};
+  //! Total Strain
+  Eigen::Matrix<double, 6, 1> strain_total_;
+  //! Maximum Strain
+  Eigen::Matrix<double, 6, 1> strain_max_;
   //! Initial loading
   bool init_loading_{true};
 
