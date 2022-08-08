@@ -1399,10 +1399,11 @@ void mpm::Mesh<Tdim>::apply_pressure_boundary_free_surface(int step) {
   // TODO:input
   // for cylinder
   double boundary[6] = {-3, 3, -3, 3, -1, 1};
-  double traction[3] = {1, 1, 1};
+  double traction[3] = {1, 1, 0.0};
   double math = step / 5000.0;
   if (step > 5000) math = 1;
-  for (int i = 0; i < 3; i++) traction[i] = -traction[i] * math * 1000000;
+  const double pressure = 1.0e+6;
+  for (int i = 0; i < 3; i++) traction[i] = -traction[i] * math * pressure;
   double gradient_traction[3] = {0, 0, 0};
   // for sigma_xx
   // double boundary[6] = {0, 0.7, 0, 0.7, -1, 1};

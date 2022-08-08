@@ -7,6 +7,8 @@
 
 #include "material.h"
 
+#include <iostream>
+
 namespace mpm {
 
 //! LinearElastic class
@@ -36,13 +38,10 @@ class LinearElastic : public Material<Tdim> {
 
   //! Initialise history variables
   //! \retval state_vars State variables with history
-  mpm::dense_map initialise_state_variables() override {
-    mpm::dense_map state_vars;
-    return state_vars;
-  }
+  mpm::dense_map initialise_state_variables() override;
 
   //! State variables
-  std::vector<std::string> state_variables() const override { return {}; }
+  std::vector<std::string> state_variables() const override;
 
   //! Compute stress
   //! \param[in] stress Stress

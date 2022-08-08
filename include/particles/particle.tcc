@@ -272,7 +272,7 @@ void mpm::Particle<Tdim>::initialise() {
   volumetric_strain_centroid_ = 0.;
 
   // Initialize scalar, vector, and tensor data properties
-  this->scalar_properties_["mass"] = [&]() { return mass(); };
+  this->scalar_properties_["mass"] = [&]() { return cell_id(); };
   this->scalar_properties_["volume"] = [&]() { return volume(); };
   this->scalar_properties_["mass_density"] = [&]() { return mass_density(); };
   this->vector_properties_["displacements"] = [&]() { return displacement(); };

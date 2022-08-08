@@ -35,6 +35,22 @@ mpm::LinearElastic<Tdim>::LinearElastic(unsigned id,
   }
 }
 
+//! Initialise state variables
+template <unsigned Tdim>
+mpm::dense_map mpm::LinearElastic<Tdim>::initialise_state_variables() {
+  mpm::dense_map state_vars = {
+      // save current cell_id
+      {"cell_id", 0}};
+  return state_vars;
+}
+
+//! Initialise state variables
+template <unsigned Tdim>
+std::vector<std::string> mpm::LinearElastic<Tdim>::state_variables() const {
+  const std::vector<std::string> state_vars = {"cell_id"};
+  return state_vars;
+}
+
 //! Return elastic tensor
 template <unsigned Tdim>
 bool mpm::LinearElastic<Tdim>::compute_elastic_tensor() {
@@ -61,6 +77,15 @@ template <unsigned Tdim>
 Eigen::Matrix<double, 6, 1> mpm::LinearElastic<Tdim>::compute_stress(
     const Vector6d& stress, const Vector6d& dstrain,
     const ParticleBase<Tdim>* ptr, mpm::dense_map* state_vars) {
+
+  const double cell_id_old = (*state_vars).at("cell_id");
+  const double cell_id_new = ptr->cell_id();
+
+  if (std::fabs(cell_id_old - cell_id_new) > 1e-12){
+    std::cout << "MATERIAL POINT CELL_ID CHANGED... MP ID : " << ptr->id() << std::endl;
+    (*state_vars).at("cell_id") = cell_id_new;
+  }
+
   const Vector6d dstress = this->de_ * dstrain;
   return (stress + dstress);
 }
