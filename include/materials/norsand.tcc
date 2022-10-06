@@ -258,7 +258,7 @@ Eigen::Matrix<double, 6, 6> mpm::NorSand<Tdim>::compute_elasto_plastic_tensor(
       (3. * std::pow(Mtc_, 2) * sin(3. / 2. * lode_angle)) / (2. * (3. + Mtc_));
 
   // Compute dtheta / dsigma
-  const Vector6d dtheta_dsigma = mpm::materials::dtheta_dsigma(stress_neg);
+  const Vector6d dtheta_dsigma = -1. * mpm::materials::dtheta_dsigma(stress_neg);
 
   // dF_dsigma is in compression negative
   const Vector6d dF_dsigma =
