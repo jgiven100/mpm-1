@@ -37,7 +37,7 @@ inline void mpm::MPMSchemeNewmark<Tdim>::initialise() {
 //! Compute nodal kinematics - map mass, momentum and inertia to nodes
 template <unsigned Tdim>
 inline void mpm::MPMSchemeNewmark<Tdim>::compute_nodal_kinematics(
-    unsigned phase) {
+    mpm::VelocityUpdate velocity_update, unsigned phase) {
   // Assign mass, momentum and inertia to nodes
   mesh_->iterate_over_particles(
       std::bind(&mpm::ParticleBase<Tdim>::map_mass_momentum_inertia_to_nodes,
@@ -86,7 +86,7 @@ inline void mpm::MPMSchemeNewmark<Tdim>::update_nodal_kinematics_newmark(
 //! Compute stress and strain by Newmark scheme
 template <unsigned Tdim>
 inline void mpm::MPMSchemeNewmark<Tdim>::compute_stress_strain(
-    unsigned phase, bool pressure_smoothing) {
+    unsigned phase, bool pressure_smoothing, mpm::StressRate stress_rate) {
 
   // Iterate over each particle to calculate strain and volume using nodal
   // displacement
@@ -105,13 +105,13 @@ inline void mpm::MPMSchemeNewmark<Tdim>::compute_stress_strain(
 //! Precompute stresses and strains
 template <unsigned Tdim>
 inline void mpm::MPMSchemeNewmark<Tdim>::precompute_stress_strain(
-    unsigned phase, bool pressure_smoothing) {}
+    unsigned phase, bool pressure_smoothing, mpm::StressRate stress_rate) {}
 
 //! Postcompute stresses and strains
 template <unsigned Tdim>
 inline void mpm::MPMSchemeNewmark<Tdim>::postcompute_stress_strain(
-    unsigned phase, bool pressure_smoothing) {
-  this->compute_stress_strain(phase, pressure_smoothing);
+    unsigned phase, bool pressure_smoothing, mpm::StressRate stress_rate) {
+  this->compute_stress_strain(phase, pressure_smoothing, stress_rate);
 }
 
 // Compute forces
@@ -159,8 +159,9 @@ inline void mpm::MPMSchemeNewmark<Tdim>::compute_forces(
 // Update particle kinematics
 template <unsigned Tdim>
 inline void mpm::MPMSchemeNewmark<Tdim>::compute_particle_kinematics(
-    bool velocity_update, unsigned phase, const std::string& damping_type,
-    double damping_factor, unsigned step, bool update_defgrad) {
+    mpm::VelocityUpdate velocity_update, double blending_ratio, unsigned phase,
+    const std::string& damping_type, double damping_factor, unsigned step,
+    bool update_defgrad) {
 
   // Iterate over each particle to compute updated position
   mesh_->iterate_over_particles(
@@ -186,7 +187,7 @@ inline void
 //! Postcompute nodal kinematics - map mass and momentum to nodes
 template <unsigned Tdim>
 inline void mpm::MPMSchemeNewmark<Tdim>::postcompute_nodal_kinematics(
-    unsigned phase) {}
+    mpm::VelocityUpdate velocity_update, unsigned phase) {}
 
 //! Stress update scheme
 template <unsigned Tdim>

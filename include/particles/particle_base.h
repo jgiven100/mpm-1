@@ -150,7 +150,10 @@ class ParticleBase {
   virtual void compute_mass() noexcept = 0;
 
   //! Map particle mass and momentum to nodes
-  virtual void map_mass_momentum_to_nodes() noexcept = 0;
+  //! \param[in] velocity_update Method to update nodal velocity
+  virtual void map_mass_momentum_to_nodes(
+      mpm::VelocityUpdate velocity_update =
+          mpm::VelocityUpdate::FLIP) noexcept = 0;
 
   //! Map multimaterial properties to nodes
   virtual void map_multimaterial_mass_momentum_to_nodes() noexcept = 0;
@@ -227,6 +230,7 @@ class ParticleBase {
   virtual double pressure(unsigned phase = mpm::ParticlePhase::Solid) const = 0;
 
   //! Compute strain
+  //! \param[in] dt Analysis time step
   virtual void compute_strain(double dt) noexcept = 0;
 
   //! Strain
@@ -249,7 +253,11 @@ class ParticleBase {
   virtual void initial_stress(const Eigen::Matrix<double, 6, 1>& stress) = 0;
 
   //! Compute stress
-  virtual void compute_stress() noexcept = 0;
+  //! \param[in] dt Analysis time step
+  //! \param[in] stress_rate Use Cauchy or Jaumann rate of stress
+  virtual void compute_stress(
+      double dt,
+      mpm::StressRate stress_rate = mpm::StressRate::None) noexcept = 0;
 
   //! Return stress
   virtual Eigen::Matrix<double, 6, 1> stress() const = 0;
@@ -288,7 +296,9 @@ class ParticleBase {
 
   //! Compute updated position
   virtual void compute_updated_position(
-      double dt, bool velocity_update = false) noexcept = 0;
+      double dt,
+      mpm::VelocityUpdate velocity_update = mpm::VelocityUpdate::FLIP,
+      double blending_ratio = 1.0) noexcept = 0;
 
   //! Return scalar data of particles
   //! \param[in] property Property string
@@ -419,6 +429,10 @@ class ParticleBase {
   //! \ingroup Implicit
   virtual void initialise_constitutive_law() noexcept = 0;
 
+  //! Return mapping matrix
+  //! \ingroup AdvancedMapping
+  virtual Eigen::MatrixXd mapping_matrix() const = 0;
+
   //! Navier-Stokes functions----------------------------------
   //! Assigning beta parameter to particle
   //! \param[in] parameter parameter determining type of projection
@@ -426,6 +440,14 @@ class ParticleBase {
     throw std::runtime_error(
         "Calling the base class function (assign_projection_parameter) in "
         "ParticleBase:: illegal operation!");
+  };
+
+  //! Return projection parameter
+  virtual double projection_parameter() const {
+    throw std::runtime_error(
+        "Calling the base class function (projection_param) in "
+        "ParticleBase:: illegal operation!");
+    return 0;
   };
 
   //! Map laplacian element matrix to cell (used in poisson equation LHS)
@@ -507,6 +529,11 @@ class ParticleBase {
   };
 
   //! Initialise particle pore pressure by watertable
+  //! \param[in] dir_v Vertical direction (Gravity direction) of the watertable
+  //! \param[in] dir_h Horizontal direction of the watertable
+  //! \param[in] gravity Gravity vector
+  //! \param[in] reference_points
+  //! (Horizontal coordinate of borehole + height of 0 pore pressure)
   virtual bool initialise_pore_pressure_watertable(
       const unsigned dir_v, const unsigned dir_h, const VectorDim& gravity,
       std::map<double, double>& reference_points) {

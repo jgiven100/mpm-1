@@ -31,6 +31,8 @@ TEST_CASE("Triangle lme elements are checked", "[tri][element][2D][lme]") {
 
       // Check shape function
       REQUIRE(shapefn.size() == 3);
+      REQUIRE(tri->nfunctions() == 3);
+      REQUIRE(tri->nfunctions_local() == 3);
 
       REQUIRE(shapefn(0) == Approx(0.66666666666).epsilon(Tolerance));
       REQUIRE(shapefn(1) == Approx(0.16666666666).epsilon(Tolerance));
@@ -179,6 +181,8 @@ TEST_CASE("Triangle lme elements are checked", "[tri][element][2D][lme]") {
 
           // Check shape function
           REQUIRE(shapefn.size() == 14);
+          REQUIRE(tri->nfunctions() == 14);
+          REQUIRE(tri->nfunctions_local() == 3);
           REQUIRE(shapefn.sum() == Approx(1.).epsilon(Tolerance));
 
           REQUIRE(shapefn(0) == Approx(1. / 3.).epsilon(Tolerance));
@@ -286,6 +290,8 @@ TEST_CASE("Triangle lme elements are checked", "[tri][element][2D][lme]") {
 
       // Check shape function
       REQUIRE(shapefn.size() == 108);
+      REQUIRE(tri->nfunctions() == 108);
+      REQUIRE(tri->nfunctions_local() == 3);
       REQUIRE(shapefn.sum() == Approx(1.).epsilon(Tolerance));
 
       Eigen::VectorXd shapefn_ans = Eigen::VectorXd::Constant(108, 1.0);
@@ -387,6 +393,71 @@ TEST_CASE("Triangle lme elements are checked", "[tri][element][2D][lme]") {
       for (unsigned i = 0; i < gradsf.rows(); ++i)
         for (unsigned j = 0; j < gradsf.cols(); ++j)
           REQUIRE(gradsf(i, j) == Approx(gradsf_ans(i, j)).epsilon(Tolerance));
+
+      // Check dN/dx
+      zero.setZero();
+      auto dn_dx = tri->dn_dx(coords, nodal_coords, zero, def_gradient);
+      REQUIRE(dn_dx.rows() == 108);
+      REQUIRE(dn_dx.cols() == Dim);
+
+      for (unsigned i = 0; i < dn_dx.rows(); ++i)
+        for (unsigned j = 0; j < dn_dx.cols(); ++j)
+          REQUIRE(dn_dx(i, j) == Approx(gradsf_ans(i, j)).epsilon(Tolerance));
+
+      // Check dN/dx local
+      // Reset nodal coordinates as order becomes important in dn_dx_local
+      nodal_coords.setZero();
+      nodal_coords << -0.5, 0., 0.5, 0., 0., 1.5, 0., 0.8660254, 1., 0.8660254,
+          -1., 0.8660254, 0., -0.8660254, 1., -0.8660254, -1., -0.8660254, 0.5,
+          1.73205081, -0.5, 1.73205081, -1.5, 1.73205081, -3.5, -3.46410162,
+          -2.5, -3.46410162, -4.5, -3.46410162, -3., -2.59807621, -2.,
+          -2.59807621, -4., -2.59807621, -3., -4.33012702, -2., -4.33012702,
+          -4., -4.33012702, -2.5, -1.73205081, -3.5, -1.73205081, -4.5,
+          -1.73205081, -3.5, 0., -2.5, 0., -4.5, 0., -3., 0.8660254, -2.,
+          0.8660254, -4., 0.8660254, -3., -0.8660254, -2., -0.8660254, -4.,
+          -0.8660254, -2.5, 1.73205081, -3.5, 1.73205081, -4.5, 1.73205081,
+          -3.5, 3.46410162, -2.5, 3.46410162, -4.5, 3.46410162, -3., 4.33012702,
+          -2., 4.33012702, -4., 4.33012702, -3., 2.59807621, -2., 2.59807621,
+          -4., 2.59807621, -2.5, 5.19615242, -3.5, 5.19615242, -4.5, 5.19615242,
+          -0.5, -3.46410162, 0.5, -3.46410162, -1.5, -3.46410162, 0.,
+          -2.59807621, 1., -2.59807621, -1., -2.59807621, 0., -4.33012702, 1.,
+          -4.33012702, -1., -4.33012702, 0.5, -1.73205081, -0.5, -1.73205081,
+          -1.5, -1.73205081, -0.5, 3.46410162, 0.5, 3.46410162, -1.5,
+          3.46410162, 0., 4.33012702, 1., 4.33012702, -1., 4.33012702, 0.,
+          2.59807621, 1., 2.59807621, -1., 2.59807621, 0.5, 5.19615242, -0.5,
+          5.19615242, -1.5, 5.19615242, 2.5, -3.46410162, 3.5, -3.46410162, 1.5,
+          -3.46410162, 3., -2.59807621, 4., -2.59807621, 2., -2.59807621, 3.,
+          -4.33012702, 4., -4.33012702, 2., -4.33012702, 3.5, -1.73205081, 2.5,
+          -1.73205081, 1.5, -1.73205081, 2.5, 0., 3.5, 0., 1.5, 0., 3.,
+          0.8660254, 4., 0.8660254, 2., 0.8660254, 3., -0.8660254, 4.,
+          -0.8660254, 2., -0.8660254, 3.5, 1.73205081, 2.5, 1.73205081, 1.5,
+          1.73205081, 2.5, 3.46410162, 3.5, 3.46410162, 1.5, 3.46410162, 3.,
+          4.33012702, 4., 4.33012702, 2., 4.33012702, 3., 2.59807621, 4.,
+          2.59807621, 2., 2.59807621, 3.5, 5.19615242, 2.5, 5.19615242, 1.5,
+          5.19615242;
+
+      Eigen::Matrix<double, 108, Dim> dndx_local;
+      dndx_local << -1, -0.333333, 1, -0.333333, 0, 0.666667, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+          0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0;
+
+      auto dn_dx_local =
+          tri->dn_dx_local(zero, nodal_coords, zero, def_gradient);
+
+      REQUIRE(dn_dx_local.rows() == 108);
+      REQUIRE(dn_dx_local.cols() == Dim);
+
+      for (unsigned i = 0; i < dn_dx_local.rows(); ++i)
+        for (unsigned j = 0; j < dn_dx_local.cols(); ++j)
+          REQUIRE(dn_dx_local(i, j) ==
+                  Approx(dndx_local(i, j)).epsilon(Tolerance));
     }
 
     SECTION("2D triangular LME element evaluation at the edge of the mesh") {
@@ -442,6 +513,8 @@ TEST_CASE("Triangle lme elements are checked", "[tri][element][2D][lme]") {
 
       // Check shape function
       REQUIRE(shapefn.size() == 108);
+      REQUIRE(tri->nfunctions() == 108);
+      REQUIRE(tri->nfunctions_local() == 3);
       REQUIRE(shapefn.sum() == Approx(1.).epsilon(Tolerance));
 
       // Compute gradient of shape functions

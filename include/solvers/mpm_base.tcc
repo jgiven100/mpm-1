@@ -51,6 +51,21 @@ mpm::MPMBase<Tdim>::MPMBase(const std::shared_ptr<IO>& io) : mpm::MPM(io) {
     if (analysis_.find("locate_particles") != analysis_.end())
       locate_particles_ = analysis_["locate_particles"].template get<bool>();
 
+    // Stress rate method (None/Jaumann)
+    try {
+      if (analysis_.find("stress_rate") != analysis_.end()) {
+        if (analysis_["stress_rate"].template get<std::string>() == "jaumann")
+          stress_rate_ = mpm::StressRate::Jaumann;
+        else
+          throw std::runtime_error("Stress rate type is not supported");
+      } else
+        throw std::runtime_error("No stress rate type specified");
+    } catch (std::exception& exception) {
+      console_->warn(
+          "{} #{}: {}. Using Cauchy stress rate (non-objective) as default",
+          __FILE__, __LINE__, exception.what());
+    }
+
     // Stress update method (USF/USL/MUSL/Newmark)
     try {
       if (analysis_.find("mpm_scheme") != analysis_.end())
@@ -63,15 +78,39 @@ mpm::MPMBase<Tdim>::MPMBase(const std::shared_ptr<IO>& io) : mpm::MPM(io) {
     }
 
     // Velocity update
+    std::string vel_update_type;
     try {
-      velocity_update_ = analysis_["velocity_update"].template get<bool>();
+      if (analysis_["velocity_update"].is_boolean()) {
+        bool v_update = analysis_["velocity_update"].template get<bool>();
+        vel_update_type = (v_update) ? "pic" : "flip";
+      } else
+        vel_update_type =
+            analysis_["velocity_update"].template get<std::string>();
+
+      // Check if blending_ratio is specified
+      if (analysis_.contains("velocity_update_settings") &&
+          analysis_["velocity_update_settings"].contains("blending_ratio")) {
+        blending_ratio_ = analysis_["velocity_update_settings"]
+                              .at("blending_ratio")
+                              .template get<double>();
+        // Check if blending ratio value is appropriately assigned
+        if (blending_ratio_ < 0. || blending_ratio_ > 1.) {
+          blending_ratio_ = 1.0;
+          console_->warn(
+              "{} #{}: FLIP-PIC Blending ratio is not properly assigned, using "
+              "default value as 1.0.",
+              __FILE__, __LINE__);
+        }
+      }
+
     } catch (std::exception& exception) {
       console_->warn(
-          "{} #{}: Velocity update parameter is not specified, using default "
-          "as false",
+          "{} #{}: {} Velocity update method is not properly specified, using "
+          "default as \'flip\'",
           __FILE__, __LINE__, exception.what());
-      velocity_update_ = false;
+      vel_update_type = "flip";
     }
+    velocity_update_ = VelocityUpdateType.at(vel_update_type);
 
     // Damping
     try {
@@ -242,6 +281,9 @@ void mpm::MPMBase<Tdim>::initialise_mesh() {
 
   // Read and assign friction constraints
   this->nodal_frictional_constraints(mesh_props, mesh_io);
+
+  // Read and assign cohesion constraints
+  this->nodal_cohesional_constraints(mesh_props, mesh_io);
 
   // Read and assign pressure constraints
   this->nodal_pressure_constraints(mesh_props, mesh_io);
@@ -1113,9 +1155,9 @@ void mpm::MPMBase<Tdim>::nodal_frictional_constraints(
 
           // Set id
           int nset_id = constraints.at("nset_id").template get<int>();
-          // Direction
+          // Direction (normal)
           unsigned dir = constraints.at("dir").template get<unsigned>();
-          // Sign n
+          // Sign of normal direction
           int sign_n = constraints.at("sign_n").template get<int>();
           // Friction
           double friction = constraints.at("friction").template get<double>();
@@ -1135,6 +1177,64 @@ void mpm::MPMBase<Tdim>::nodal_frictional_constraints(
 
   } catch (std::exception& exception) {
     console_->warn("#{}: Friction conditions are undefined {} ", __LINE__,
+                   exception.what());
+  }
+}
+
+// Nodal cohesional constraints
+template <unsigned Tdim>
+void mpm::MPMBase<Tdim>::nodal_cohesional_constraints(
+    const Json& mesh_props, const std::shared_ptr<mpm::IOMesh<Tdim>>& mesh_io) {
+  try {
+    // Read and assign cohesion constraints
+    if (mesh_props.find("boundary_conditions") != mesh_props.end() &&
+        mesh_props["boundary_conditions"].find("cohesion_constraints") !=
+            mesh_props["boundary_conditions"].end()) {
+      // Iterate over cohesion constraints
+      for (const auto& constraints :
+           mesh_props["boundary_conditions"]["cohesion_constraints"]) {
+        // Cohesion constraints are specified in a file
+        if (constraints.find("file") != constraints.end()) {
+          std::string cohesion_constraints_file =
+              constraints.at("file").template get<std::string>();
+          bool cohesion_constraints =
+              constraints_->assign_nodal_cohesion_constraints(
+                  mesh_io->read_cohesion_constraints(
+                      io_->file_name(cohesion_constraints_file)));
+          if (!cohesion_constraints)
+            throw std::runtime_error(
+                "Cohesion constraints are not properly assigned");
+
+        } else {  // Entity sets
+
+          // Set id
+          int nset_id = constraints.at("nset_id").template get<int>();
+          // Direction (normal)
+          unsigned dir = constraints.at("dir").template get<unsigned>();
+          // Sign of normal direction
+          int sign_n = constraints.at("sign_n").template get<int>();
+          // Cohesion
+          double cohesion = constraints.at("cohesion").template get<double>();
+          // h_min
+          double h_min = constraints.at("h_min").template get<double>();
+          // nposition
+          int nposition = constraints.at("nposition").template get<int>();
+          // Add cohesion constraint to mesh
+          auto cohesion_constraint = std::make_shared<mpm::CohesionConstraint>(
+              nset_id, dir, sign_n, cohesion, h_min, nposition);
+          bool cohesion_constraints =
+              constraints_->assign_nodal_cohesional_constraint(
+                  nset_id, cohesion_constraint);
+          if (!cohesion_constraints)
+            throw std::runtime_error(
+                "Nodal cohesion constraint is not properly assigned");
+        }
+      }
+    } else
+      throw std::runtime_error("Cohesion constraints JSON not found");
+
+  } catch (std::exception& exception) {
+    console_->warn("#{}: Cohesion conditions are undefined {} ", __LINE__,
                    exception.what());
   }
 }
@@ -1477,11 +1577,30 @@ void mpm::MPMBase<Tdim>::particles_pore_pressures(
           reference_points.insert(std::make_pair<double, double>(
               static_cast<double>(position), static_cast<double>(h0)));
         }
+
+        // Read gravity
+        Eigen::Matrix<double, Tdim, 1> gravity =
+            Eigen::Matrix<double, Tdim, 1>::Zero();
+        auto loads = io_->json_object("external_loading_conditions");
+        if (loads.contains("gravity")) {
+          if (loads.at("gravity").is_array() &&
+              loads.at("gravity").size() == gravity.size()) {
+            for (unsigned i = 0; i < gravity.size(); ++i) {
+              gravity[i] = loads.at("gravity").at(i);
+            }
+          } else {
+            throw std::runtime_error("Specified gravity dimension is invalid");
+          }
+        } else {
+          throw std::runtime_error(
+              "In order to use the option water table, \"gravity\" should be "
+              "specified in the \"external_loading_conditions\"! ");
+        }
+
         // Initialise particles pore pressures by watertable
         mesh_->iterate_over_particles(std::bind(
             &mpm::ParticleBase<Tdim>::initialise_pore_pressure_watertable,
-            std::placeholders::_1, dir_v, dir_h, this->gravity_,
-            reference_points));
+            std::placeholders::_1, dir_v, dir_h, gravity, reference_points));
       } else if (type == "isotropic") {
         const double pore_pressure =
             mesh_props["particles_pore_pressures"]["values"]
@@ -1732,6 +1851,17 @@ void mpm::MPMBase<Tdim>::initialise_nonlocal_mesh(const Json& mesh_props) {
         const auto sf_type = mesh_props["nonlocal_mesh_properties"]["type"]
                                  .template get<std::string>();
         assert(sf_type == "BSPLINE");
+
+        // Apply kernel correction
+        bool kernel_correction = true;
+        if (mesh_props["nonlocal_mesh_properties"].contains(
+                "kernel_correction")) {
+          kernel_correction =
+              mesh_props["nonlocal_mesh_properties"]["kernel_correction"]
+                  .template get<bool>();
+        }
+        nonlocal_properties.insert(std::pair<std::string, bool>(
+            "kernel_correction", kernel_correction));
 
         // Iterate over node type
         for (const auto& node_type :

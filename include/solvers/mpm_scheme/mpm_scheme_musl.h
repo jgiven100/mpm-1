@@ -25,19 +25,25 @@ class MPMSchemeMUSL : public MPMScheme<Tdim> {
   MPMSchemeMUSL(const std::shared_ptr<mpm::Mesh<Tdim>>& mesh, double dt);
 
   //! Precompute stress
-  //! \param[in] phase Phase to smooth postssure
-  //! \param[in] postssure_smoothing Enable or disable postssure smoothing
+  //! \param[in] phase Phase to smooth pressure
+  //! \param[in] pressure_smoothing Enable or disable pressure smoothing
+  //! \param[in] stress_rate Use Cauchy or Jaumann rate of stress
   virtual inline void precompute_stress_strain(
-      unsigned phase, bool pressure_smoothing) override;
+      unsigned phase, bool pressure_smoothing,
+      mpm::StressRate stress_rate) override;
   //! Postcompute stress
-  //! \param[in] phase Phase to smooth postssure
-  //! \param[in] postssure_smoothing Enable or disable postssure smoothing
+  //! \param[in] phase Phase to smooth pressure
+  //! \param[in] pressure_smoothing Enable or disable pressure smoothing
+  //! \param[in] stress_rate Use Cauchy or Jaumann rate of stress
   virtual inline void postcompute_stress_strain(
-      unsigned phase, bool pressure_smoothing) override;
+      unsigned phase, bool pressure_smoothing,
+      mpm::StressRate stress_rate) override;
 
   //! Postcompute nodal kinematics - map mass and momentum to nodes
+  //! \param[in] velocity_update Method to update nodal velocity
   //! \param[in] phase Phase to smooth pressure
-  virtual inline void postcompute_nodal_kinematics(unsigned phase) override;
+  virtual inline void postcompute_nodal_kinematics(
+      mpm::VelocityUpdate velocity_update, unsigned phase) override;
 
   //! Stress update scheme
   //! \retval scheme Stress update scheme

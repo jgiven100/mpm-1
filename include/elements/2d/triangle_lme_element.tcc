@@ -8,6 +8,12 @@ void mpm::TriangleLMEElement<Tdim>::initialise_lme_connectivity_properties(
   this->beta_ = beta;
   this->anisotropy_ = anisotropy;
   this->support_radius_ = radius;
+
+  //! Uniform spacing length in 2D
+  const double spacing_length =
+      std::abs(nodal_coordinates(1, 0) - nodal_coordinates(0, 0));
+  const double gamma = beta * spacing_length * spacing_length;
+  if (gamma > 6.0) this->preconditioner_ = true;
 }
 
 //! Return shape functions of a Quadrilateral LME Element at a given
@@ -88,7 +94,7 @@ inline Eigen::VectorXd mpm::TriangleLMEElement<Tdim>::shapefn(
     if (r.norm() > tolerance) {
       bool convergence = false;
       unsigned it = 1;
-      const unsigned max_it = 10;
+      const unsigned max_it = 100;
       while (!convergence) {
         //! Compute matrix J
         Eigen::Matrix2d J = -r * r.transpose();
@@ -98,9 +104,10 @@ inline Eigen::VectorXd mpm::TriangleLMEElement<Tdim>::shapefn(
         }
 
         //! Add preconditioner for J (Mathieu Foca, PhD Thesis)
-        J.diagonal().array() += r.norm();
+        if (this->preconditioner_) J.diagonal().array() += r.norm();
 
         //! Compute Delta lambda
+        const auto olambda = lambda;
         const auto& dlambda = J.inverse() * (-r);
         lambda = lambda + dlambda;
 
@@ -130,15 +137,22 @@ inline Eigen::VectorXd mpm::TriangleLMEElement<Tdim>::shapefn(
         //! Check convergence
         if (r.norm() < tolerance) {
           convergence = true;
+        } else if ((lambda - olambda).norm() < tolerance) {
+          convergence = true;
         } else if (it == max_it) {
+          //! Abort simulation if r.norm() is too big
+          if (r.norm() > 1.e-3)
+            throw std::runtime_error(
+                "LME shapefn: the LME Newton-Raphson iteration unable to "
+                "converge");
+
           //! Check condition number
           Eigen::JacobiSVD<Eigen::MatrixXd> svd(J);
           const double rcond =
               svd.singularValues()(svd.singularValues().size() - 1) /
               svd.singularValues()(0);
           if (rcond < 1E-8)
-            console_->warn("The LME Hessian matrix is singular!");
-
+            console_->warn("LME shapefn: the LME Hessian matrix is singular!");
           convergence = true;
         }
         it++;
@@ -234,16 +248,17 @@ inline Eigen::MatrixXd mpm::TriangleLMEElement<Tdim>::grad_shapefn(
     }
 
     //! Add preconditioner for J (Mathieu Foca, PhD Thesis)
-    J.diagonal().array() += r.norm();
+    if (this->preconditioner_) J.diagonal().array() += r.norm();
 
     //! Begin Newton-Raphson iteration
     const double tolerance = 1.e-12;
     if (r.norm() > tolerance) {
       bool convergence = false;
       unsigned it = 1;
-      unsigned max_it = 10;
+      unsigned max_it = 100;
       while (!convergence) {
         //! Compute Delta lambda
+        const auto olambda = lambda;
         const auto& dlambda = J.inverse() * (-r);
         lambda = lambda + dlambda;
 
@@ -278,10 +293,30 @@ inline Eigen::MatrixXd mpm::TriangleLMEElement<Tdim>::grad_shapefn(
         }
 
         //! Add preconditioner for J (Mathieu Foca, PhD Thesis)
-        J.diagonal().array() += r.norm();
+        if (this->preconditioner_) J.diagonal().array() += r.norm();
 
         //! Check convergence
-        if (r.norm() <= tolerance || it == max_it) convergence = true;
+        if (r.norm() < tolerance) {
+          convergence = true;
+        } else if ((lambda - olambda).norm() < tolerance) {
+          convergence = true;
+        } else if (it == max_it) {
+          //! Abort simulation if r.norm() is too big
+          if (r.norm() > 1.e-3)
+            throw std::runtime_error(
+                "LME grad_shapefn: the LME Newton-Raphson iteration unable to "
+                "converge");
+
+          //! Check condition number
+          Eigen::JacobiSVD<Eigen::MatrixXd> svd(J);
+          const double rcond =
+              svd.singularValues()(svd.singularValues().size() - 1) /
+              svd.singularValues()(0);
+          if (rcond < 1E-8)
+            console_->warn(
+                "LME grad_shapefn: the LME Hessian matrix is singular!");
+          convergence = true;
+        }
         it++;
       }
     }
@@ -308,6 +343,31 @@ inline Eigen::MatrixXd mpm::TriangleLMEElement<Tdim>::dn_dx(
   return this->grad_shapefn(xi, lambda, deformation_gradient);
 }
 
+//! Compute local dn_dx
+template <unsigned Tdim>
+inline Eigen::MatrixXd mpm::TriangleLMEElement<Tdim>::dn_dx_local(
+    const VectorDim& xi, const Eigen::MatrixXd& nodal_coordinates,
+    VectorDim& particle_size, const MatrixDim& deformation_gradient) const {
+  // Get gradient shape functions
+  Eigen::MatrixXd grad_sf = mpm::TriangleElement<Tdim, 3>::grad_shapefn(
+      xi, particle_size, deformation_gradient);
+
+  // Jacobian dx_i/dxi_j
+  Eigen::Matrix<double, Tdim, Tdim> jacobian =
+      (grad_sf.transpose() * nodal_coordinates.block(0, 0, 3, Tdim));
+
+  // Gradient shapefn of the cell
+  // dN/dx = [J]^-1 * dN/dxi
+  const Eigen::MatrixXd dn_dx = grad_sf * (jacobian.inverse()).transpose();
+
+  // Compute dN/dx local
+  Eigen::MatrixXd dn_dx_local(this->nconnectivity_, Tdim);
+  dn_dx_local.setZero();
+  dn_dx_local.block(0, 0, 3, Tdim) = dn_dx;
+
+  return dn_dx_local;
+}
+
 //! Return the B-matrix of a Quadrilateral Element at a given local
 //! coordinate for a real cell
 template <unsigned Tdim>
@@ -316,7 +376,7 @@ inline std::vector<Eigen::MatrixXd> mpm::TriangleLMEElement<Tdim>::bmatrix(
     VectorDim& lambda, const MatrixDim& deformation_gradient) const {
 
   // Get gradient shape functions
-  Eigen::MatrixXd grad_sf =
+  Eigen::MatrixXd grad_shapefn =
       this->grad_shapefn(xi, lambda, deformation_gradient);
 
   // B-Matrix
@@ -325,7 +385,7 @@ inline std::vector<Eigen::MatrixXd> mpm::TriangleLMEElement<Tdim>::bmatrix(
 
   try {
     // Check if matrices dimensions are correct
-    if ((grad_sf.rows() != nodal_coordinates.rows()) ||
+    if ((grad_shapefn.rows() != nodal_coordinates.rows()) ||
         (xi.rows() != nodal_coordinates.cols()))
       throw std::runtime_error(
           "BMatrix - Jacobian calculation: Incorrect dimension of xi and "
@@ -334,14 +394,6 @@ inline std::vector<Eigen::MatrixXd> mpm::TriangleLMEElement<Tdim>::bmatrix(
     console_->error("{} #{}: {}\n", __FILE__, __LINE__, exception.what());
     return bmatrix;
   }
-
-  // Jacobian dx_i/dxi_j
-  Eigen::Matrix<double, Tdim, Tdim> jacobian =
-      (grad_sf.transpose() * nodal_coordinates);
-
-  // Gradient shapefn of the cell
-  // dN/dx = [J]^-1 * dN/dxi
-  Eigen::MatrixXd grad_shapefn = grad_sf * (jacobian.inverse()).transpose();
 
   for (unsigned i = 0; i < this->nconnectivity_; ++i) {
     Eigen::Matrix<double, 3, Tdim> bi;
@@ -372,24 +424,9 @@ inline Eigen::Matrix<double, Tdim, Tdim>
         const VectorDim& xi, const Eigen::MatrixXd& nodal_coordinates,
         VectorDim& lambda, const MatrixDim& deformation_gradient) const {
 
-  // Get gradient shape functions
-  const Eigen::MatrixXd grad_shapefn =
-      this->grad_shapefn(xi, lambda, deformation_gradient);
-
-  try {
-    // Check if matrices dimensions are correct
-    if ((grad_shapefn.rows() != nodal_coordinates.rows()) ||
-        (xi.size() != nodal_coordinates.cols()))
-      throw std::runtime_error(
-          "Jacobian calculation: Incorrect dimension of xi and "
-          "nodal_coordinates");
-  } catch (std::exception& exception) {
-    console_->error("{} #{}: {}\n", __FILE__, __LINE__, exception.what());
-    return Eigen::Matrix<double, Tdim, Tdim>::Zero();
-  }
-
-  // Jacobian dx_i/dxi_j
-  return (grad_shapefn.transpose() * nodal_coordinates);
+  // Jacobian dx_i/dxi_j local
+  return this->jacobian_local(xi, nodal_coordinates.block(0, 0, 3, 2), lambda,
+                              deformation_gradient);
 }
 
 //! Compute Jacobian local with particle size and deformation gradient

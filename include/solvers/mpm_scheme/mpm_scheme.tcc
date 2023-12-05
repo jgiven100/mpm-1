@@ -41,11 +41,12 @@ inline void mpm::MPMScheme<Tdim>::initialise() {
 
 //! Compute nodal kinematics - map mass and momentum to nodes
 template <unsigned Tdim>
-inline void mpm::MPMScheme<Tdim>::compute_nodal_kinematics(unsigned phase) {
+inline void mpm::MPMScheme<Tdim>::compute_nodal_kinematics(
+    mpm::VelocityUpdate velocity_update, unsigned phase) {
   // Assign mass and momentum to nodes
   mesh_->iterate_over_particles(
       std::bind(&mpm::ParticleBase<Tdim>::map_mass_momentum_to_nodes,
-                std::placeholders::_1));
+                std::placeholders::_1, velocity_update));
 
 #ifdef USE_MPI
   // Run if there is more than a single MPI task
@@ -72,7 +73,7 @@ inline void mpm::MPMScheme<Tdim>::compute_nodal_kinematics(unsigned phase) {
 //! Compute stress and strain
 template <unsigned Tdim>
 inline void mpm::MPMScheme<Tdim>::compute_stress_strain(
-    unsigned phase, bool pressure_smoothing) {
+    unsigned phase, bool pressure_smoothing, mpm::StressRate stress_rate) {
 
   // Iterate over each particle to calculate strain
   mesh_->iterate_over_particles(std::bind(
@@ -86,8 +87,9 @@ inline void mpm::MPMScheme<Tdim>::compute_stress_strain(
   if (pressure_smoothing) this->pressure_smoothing(phase);
 
   // Iterate over each particle to compute stress
-  mesh_->iterate_over_particles(std::bind(
-      &mpm::ParticleBase<Tdim>::compute_stress, std::placeholders::_1));
+  mesh_->iterate_over_particles(
+      std::bind(&mpm::ParticleBase<Tdim>::compute_stress, std::placeholders::_1,
+                dt_, stress_rate));
 }
 
 //! Pressure smoothing
@@ -191,8 +193,9 @@ inline void mpm::MPMScheme<Tdim>::absorbing_boundary_properties() {
 // Compute particle kinematics
 template <unsigned Tdim>
 inline void mpm::MPMScheme<Tdim>::compute_particle_kinematics(
-    bool velocity_update, unsigned phase, const std::string& damping_type,
-    double damping_factor, unsigned step, bool update_defgrad) {
+    mpm::VelocityUpdate velocity_update, double blending_ratio, unsigned phase,
+    const std::string& damping_type, double damping_factor, unsigned step,
+    bool update_defgrad) {
 
   // Update nodal acceleration constraints
   mesh_->update_nodal_acceleration_constraints(step * dt_);
@@ -213,7 +216,7 @@ inline void mpm::MPMScheme<Tdim>::compute_particle_kinematics(
   // Iterate over each particle to compute updated position
   mesh_->iterate_over_particles(
       std::bind(&mpm::ParticleBase<Tdim>::compute_updated_position,
-                std::placeholders::_1, dt_, velocity_update));
+                std::placeholders::_1, dt_, velocity_update, blending_ratio));
 
   // Iterate over each particle to update deformation gradient
   if (update_defgrad)

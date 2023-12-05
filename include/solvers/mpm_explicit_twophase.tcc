@@ -17,8 +17,9 @@ void mpm::MPMExplicitTwoPhase<Tdim>::compute_stress_strain() {
   mesh_->iterate_over_particles(std::bind(
       &mpm::ParticleBase<Tdim>::update_volume, std::placeholders::_1));
   // Iterate over each particle to compute stress of soil skeleton
-  mesh_->iterate_over_particles(std::bind(
-      &mpm::ParticleBase<Tdim>::compute_stress, std::placeholders::_1));
+  mesh_->iterate_over_particles(
+      std::bind(&mpm::ParticleBase<Tdim>::compute_stress, std::placeholders::_1,
+                dt_, mpm::StressRate::None));
   // Pressure smoothing
   if (pressure_smoothing_) this->pressure_smoothing(mpm::ParticlePhase::Solid);
 
@@ -79,14 +80,26 @@ bool mpm::MPMExplicitTwoPhase<Tdim>::solve() {
   free_surface_detection_ = "none";
   if (analysis_.find("free_surface_detection") != analysis_.end()) {
     // Get method to detect free surface detection
-    free_surface_detection_ = "density";
     if (analysis_["free_surface_detection"].contains("type"))
       free_surface_detection_ = analysis_["free_surface_detection"]["type"]
                                     .template get<std::string>();
     // Get volume tolerance for free surface
-    volume_tolerance_ = analysis_["free_surface_detection"]["volume_tolerance"]
+    fs_vol_tolerance_ = analysis_["free_surface_detection"]["volume_tolerance"]
                             .template get<double>();
   }
+
+#ifdef USE_MPI
+  if (!(free_surface_detection_ == "density" ||
+        free_surface_detection_ == "none") &&
+      mpi_size > 1) {
+    console_->warn(
+        "The free-surface detection in MPI setting is automatically set to "
+        "default: "
+        "\'density\'. Only \'none\' and \'density\' free-surface detection "
+        "algorithm are supported for MPI.");
+    free_surface_detection_ = "density";
+  }
+#endif
 
   // Initialise material
   this->initialise_materials();
@@ -183,7 +196,7 @@ bool mpm::MPMExplicitTwoPhase<Tdim>::solve() {
     // Assign mass and momentum to nodes
     mesh_->iterate_over_particles(
         std::bind(&mpm::ParticleBase<Tdim>::map_mass_momentum_to_nodes,
-                  std::placeholders::_1));
+                  std::placeholders::_1, velocity_update_));
 
 #ifdef USE_MPI
     // Run if there is more than a single MPI task
@@ -220,7 +233,8 @@ bool mpm::MPMExplicitTwoPhase<Tdim>::solve() {
 
     // Compute free surface cells, nodes, and particles
     if (free_surface_detection_ != "none") {
-      mesh_->compute_free_surface(free_surface_detection_, volume_tolerance_);
+      mesh_->compute_free_surface(free_surface_detection_, fs_vol_tolerance_,
+                                  cell_neighbourhood_);
 
       // Spawn a task for initializing pressure at free surface
 #pragma omp parallel sections
@@ -344,9 +358,9 @@ bool mpm::MPMExplicitTwoPhase<Tdim>::solve() {
           std::bind(&mpm::NodeBase<Tdim>::status, std::placeholders::_1));
 
     // Update particle position and kinematics
-    mesh_->iterate_over_particles(
-        std::bind(&mpm::ParticleBase<Tdim>::compute_updated_position,
-                  std::placeholders::_1, this->dt_, velocity_update_));
+    mesh_->iterate_over_particles(std::bind(
+        &mpm::ParticleBase<Tdim>::compute_updated_position,
+        std::placeholders::_1, this->dt_, velocity_update_, blending_ratio_));
 
     // Apply particle velocity constraints
     mesh_->apply_particle_velocity_constraints();

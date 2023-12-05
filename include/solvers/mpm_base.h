@@ -46,6 +46,9 @@ enum class VariableType { Scalar, Vector, Tensor };
 //! Cundall: Cundall damping
 enum class Damping { None, Cundall };
 
+//! Velocity update type
+extern std::map<std::string, mpm::VelocityUpdate> VelocityUpdateType;
+
 //! MPMBase class
 //! \brief A class that implements the fully base one phase mpm
 //! \details A Base MPM class
@@ -157,6 +160,12 @@ class MPMBase : public MPM {
   void nodal_frictional_constraints(
       const Json& mesh_prop, const std::shared_ptr<mpm::IOMesh<Tdim>>& mesh_io);
 
+  //! Nodal cohesional constraints
+  //! \param[in] mesh_prop Mesh properties
+  //! \param[in] mesh_io Mesh IO handle
+  void nodal_cohesional_constraints(
+      const Json& mesh_prop, const std::shared_ptr<mpm::IOMesh<Tdim>>& mesh_io);
+
   //! Nodal pressure constraints
   //! \param[in] mesh_prop Mesh properties
   //! \param[in] mesh_io Mesh IO handle
@@ -245,14 +254,18 @@ class MPMBase : public MPM {
   //! Logger
   using mpm::MPM::console_;
 
+  //! State rate method
+  mpm::StressRate stress_rate_{mpm::StressRate::None};
   //! Stress update method
   std::string stress_update_{"usf"};
   //! Stress update scheme
   std::shared_ptr<mpm::MPMScheme<Tdim>> mpm_scheme_{nullptr};
   //! Interface scheme
   std::shared_ptr<mpm::Contact<Tdim>> contact_{nullptr};
-  //! velocity update
-  bool velocity_update_{false};
+  //! Velocity update method
+  mpm::VelocityUpdate velocity_update_{mpm::VelocityUpdate::FLIP};
+  //! FLIP-PIC blending ratio
+  double blending_ratio_{1.0};
   //! Gravity
   Eigen::Matrix<double, Tdim, 1> gravity_;
   //! Mesh object

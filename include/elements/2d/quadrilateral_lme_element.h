@@ -148,6 +148,15 @@ class QuadrilateralLMEElement : public QuadrilateralElement<2, 4> {
                         VectorDim& lambda,
                         const MatrixDim& deformation_gradient) const override;
 
+  //! Return the local dN/dx at a given local coord
+  //! \param[in] xi given local coordinates
+  //! \param[in] nodal_coordinates Coordinates of nodes forming the cell
+  //! \param[in] lambda Lagrange multiplier
+  //! \param[in] deformation_gradient Deformation gradient
+  Eigen::MatrixXd dn_dx_local(
+      const VectorDim& xi, const Eigen::MatrixXd& nodal_coordinates,
+      VectorDim& lambda, const MatrixDim& deformation_gradient) const override;
+
   //! Compute Jacobian local
   //! \param[in] xi given local coordinates
   //! \param[in] nodal_coordinates Coordinates of nodes forming the cell
@@ -175,6 +184,9 @@ class QuadrilateralLMEElement : public QuadrilateralElement<2, 4> {
 
   //! Return number of shape functions
   unsigned nfunctions() const override { return nconnectivity_; }
+
+  //! Return number of local shape functions
+  unsigned nfunctions_local() const override { return 4; }
 
   //! Return if natural coordinates can be evaluates
   bool isvalid_natural_coordinates_analytical() const override { return false; }
@@ -212,6 +224,8 @@ class QuadrilateralLMEElement : public QuadrilateralElement<2, 4> {
   double support_radius_;
   //! Anisotropy parameter
   bool anisotropy_{false};
+  //! Apply preconditioner
+  bool preconditioner_{false};
   //! Nodal coordinates vector (n_connectivity_ x Tdim)
   Eigen::MatrixXd nodal_coordinates_;
 };

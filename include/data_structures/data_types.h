@@ -41,6 +41,19 @@ inline double zero() {
 //! Face: Nodes on boundary faces
 enum class Position { None, Corner, Edge, Face };
 
+//! Stress rate type
+//! None: Cauchy rate (non-objective)
+//! Jaumann: Jaumann rate of Cauchy stress tensor (objective)
+enum class StressRate { None, Jaumann };
+
+//! Velocity update type
+//! Flip: fluid-implicit-particle (acceleration update)
+//! Pic: particle-in-cell (velocity update)
+//! Asflip: Affine Separable flip
+//! Tpic: Taylor pic
+//! Apic: Affine pic
+enum class VelocityUpdate { FLIP, PIC, ASFLIP, TPIC, APIC };
+
 }  // namespace mpm
 
 #endif  // MPM_DATA_TYPES_H_

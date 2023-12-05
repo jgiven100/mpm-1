@@ -60,6 +60,9 @@ class TriangleElement : public Element<Tdim> {
   //! Return number of shape functions
   unsigned nfunctions() const override { return Tnfunctions; }
 
+  //! Return number of local shape functions
+  unsigned nfunctions_local() const override { return Tnfunctions; }
+
   //! Evaluate shape functions at given local coordinates
   //! \param[in] xi given local coordinates
   //! \param[in] particle_size Particle size
@@ -118,6 +121,16 @@ class TriangleElement : public Element<Tdim> {
                         VectorDim& particle_size,
                         const MatrixDim& deformation_gradient) const override;
 
+  //! Return the local dN/dx at a given local coord
+  //! \param[in] xi given local coordinates
+  //! \param[in] nodal_coordinates Coordinates of nodes forming the cell
+  //! \param[in] particle_size Particle size
+  //! \param[in] deformation_gradient Deformation gradient
+  Eigen::MatrixXd dn_dx_local(
+      const VectorDim& xi, const Eigen::MatrixXd& nodal_coordinates,
+      VectorDim& particle_size,
+      const MatrixDim& deformation_gradient) const override;
+
   //! Evaluate the B matrix at given local coordinates for a real cell
   //! \param[in] xi given local coordinates
   //! \param[in] nodal_coordinates Coordinates of nodes forming the cell
@@ -128,20 +141,6 @@ class TriangleElement : public Element<Tdim> {
       const VectorDim& xi, const Eigen::MatrixXd& nodal_coordinates,
       VectorDim& particle_size,
       const MatrixDim& deformation_gradient) const override;
-
-  //! Evaluate the Ni Nj matrix
-  //! \param[in] xi_s Vector of local coordinates
-  //! \retval ni_nj_matrix Ni Nj matrix
-  Eigen::MatrixXd ni_nj_matrix(
-      const std::vector<VectorDim>& xi_s) const override;
-
-  //! Evaluate the Laplace matrix at given local coordinates for a real cell
-  //! \param[in] xi_s Vector of local coordinates
-  //! \param[in] nodal_coordinates Coordinates of nodes forming the cell
-  //! \retval laplace_matrix Laplace matrix
-  Eigen::MatrixXd laplace_matrix(
-      const std::vector<VectorDim>& xi_s,
-      const Eigen::MatrixXd& nodal_coordinates) const override;
 
   //! Return the degree of shape function
   mpm::ElementDegree degree() const override;
@@ -198,9 +197,11 @@ class TriangleElement : public Element<Tdim> {
   //! \param[in] nodal_coordinates Coordinates of nodes forming the cell
   //! \param[in] nodal_properties Vector determining node type for each
   //! dimension
+  //! \param[in] kernel_correction Apply Kernel correction at the boundary
   void initialise_bspline_connectivity_properties(
       const Eigen::MatrixXd& nodal_coordinates,
-      const std::vector<std::vector<unsigned>>& nodal_properties) override;
+      const std::vector<std::vector<unsigned>>& nodal_properties,
+      bool kernel_correction = false) override;
 
   //! Assign nodal connectivity property for LME elements
   //! \param[in] beta Coldness function of the system in the range of [0,inf)
